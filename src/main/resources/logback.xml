@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration scan="true" scanPeriod="60 seconds">
+
+    <!-- 日志存放路径 -->
+    <property name="log.path" value="logs" />
+
+    <!-- 控制台输出格式 -->
+    <property name="console.pattern" value="%d{yyyy-MM-dd HH:mm:ss} %highlight([%-5level]) - %msg%n"/>
+
+    <!-- 文件日志格式 -->
+    <property name="file.pattern" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - [%method,%line] - %msg%n"/>
+
+    <!-- 控制台输出 -->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${console.pattern}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- INFO 文件输出 -->
+    <appender name="file_info" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${log.path}/info.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${log.path}/info.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${file.pattern}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
+    <!-- ERROR 文件输出 -->
+    <appender name="file_error" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${log.path}/error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${log.path}/error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>60</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${file.pattern}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+    </appender>
+
+    <!-- 包级别日志 -->
+    <logger name="fun.luqing.dmws" level="INFO"/>
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.hibernate.SQL" level="OFF"/>
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="OFF"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+    <logger name="org.apache.catalina" level="WARN"/>
+
+    <!-- Root logger -->
+    <root level="INFO">
+        <appender-ref ref="console"/>
+        <appender-ref ref="file_info"/>
+        <appender-ref ref="file_error"/>
+    </root>
+
+</configuration>

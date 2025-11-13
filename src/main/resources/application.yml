@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: dmws
+  datasource:
+    dmw:
+      url: jdbc:mysql://localhost:3306/dmw
+      username: luqing
+      password: 123456
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    economy:
+      url: jdbc:mysql://localhost:3306/economy #economy
+      username: luqing
+      password: 123456
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    hy-economy:
+      url: jdbc:mysql://localhost:3306/test #hy_economy
+      username: luqing
+      password: 123456
+      driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+  main:
+    banner-mode: console
+    web-application-type: none
+
+shiro:
+  ws:
+    client:
+      enable: true
+      url: "ws://127.0.0.1:3001"
+
+
+logging:
+  level:
+    root=WARN:
