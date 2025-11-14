@@ -3,6 +3,7 @@ package fun.luqing.dmws.plugin;
 import com.mikuac.shiro.annotation.GroupMessageHandler;
 import com.mikuac.shiro.annotation.MessageHandlerFilter;
 import com.mikuac.shiro.annotation.common.Shiro;
+import com.mikuac.shiro.common.utils.MsgUtils;
 import com.mikuac.shiro.core.Bot;
 import com.mikuac.shiro.core.BotContainer;
 import com.mikuac.shiro.dto.event.message.GroupMessageEvent;
@@ -14,6 +15,7 @@ import fun.luqing.dmws.entity.dmw.TomatoSubscriptionGroup;
 import fun.luqing.dmws.repository.dmw.TomatoBookChapterRepository;
 import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import fun.luqing.dmws.repository.dmw.TomatoSubscriptionGroupRepository;
+import fun.luqing.dmws.service.TomatoBookChartService;
 import fun.luqing.dmws.utils.TomatoApiClient;
 import fun.luqing.dmws.utils.TomatoChapterRecord;
 import fun.luqing.dmws.utils.TomatoContentRecord;
@@ -46,6 +48,7 @@ public class TomatoPlugin {
     private final TomatoBookListRepository tomatoBookListRepository;
     private final TomatoSubscriptionGroupRepository tomatoSubscriptionGroupRepository;
     private final TomatoBookChapterRepository tomatoBookChapterRepository;
+    private final TomatoBookChartService tomatoBookChartService;
 
     private final TomatoApiClient tomatoApiClient = new TomatoApiClient();
 
@@ -406,7 +409,59 @@ public class TomatoPlugin {
                 book.getBookName(), successCount, failCount);
         sendGroupMessage(bot, groupId, resultMsg);
     }
-    
+
+
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(startWith = "获取更新图表")
+    @Async("taskExecutor")
+    @CommandInfo(startWith = "获取更新图表", desc = "根据订阅ID获取书籍最近30天更新图表，例如：获取更新图表 1，如遇异常书籍。使用 更新章节内容 指令刷新后重试")
+    public void getBookUpdateChart(Bot bot, GroupMessageEvent event) {
+        long groupId = event.getGroupId();
+        String param = event.getMessage().replace("获取更新图表", "").trim();
+
+        if (param.isEmpty()) {
+            sendGroupMessage(bot, groupId, "请输入订阅序号，例如：获取更新图表 1");
+            return;
+        }
+
+        long subId;
+        try {
+            subId = Long.parseLong(param);
+        } catch (NumberFormatException e) {
+            sendGroupMessage(bot, groupId, "格式错误，请输入数字序号。");
+            return;
+        }
+
+        Optional<TomatoSubscriptionGroup> subOpt = tomatoSubscriptionGroupRepository.findById(subId);
+        if (subOpt.isEmpty() || subOpt.get().getGroupId() != groupId) {
+            sendGroupMessage(bot, groupId, "未找到对应订阅。");
+            return;
+        }
+
+        TomatoSubscriptionGroup sub = subOpt.get();
+        String bookId = sub.getBookId();
+
+        TomatoBookList book = tomatoBookListRepository.findByBookId(bookId).orElse(null);
+        if (book == null) {
+            sendGroupMessage(bot, groupId, "书籍不存在。");
+            return;
+        }
+
+        String chartUrl;
+        try {
+            chartUrl = tomatoBookChartService.generateBook30DaysChart(bookId,book.getBookName());
+        } catch (Exception e) {
+            sendGroupMessage(bot, groupId, "生成图表失败：" + e.getMessage());
+            return;
+        }
+
+        bot.sendGroupMsg(groupId, MsgUtils.builder().text(STR."《\{book.getBookName()}》最近30天更新情况为\n").img(chartUrl).build(), false);
+
+
+    }
+
+
     /**
      * 取消订阅
      */
