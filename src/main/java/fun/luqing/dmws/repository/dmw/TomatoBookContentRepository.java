@@ -9,15 +9,23 @@ import java.util.List;
 public interface TomatoBookContentRepository extends JpaRepository<TomatoBookContent, Long> {
 
     @Query(value = """
-        SELECT
-            DATE(update_time) AS update_date,
-            COUNT(*) AS chapter_count,
-            SUM(word_count) AS total_word_count
-        FROM tomato_book_content
-        WHERE book_id = ?1
-        AND DATE(update_time) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-        GROUP BY DATE(update_time)
-        ORDER BY update_date ASC
-    """, nativeQuery = true)
+    WITH RECURSIVE date_series AS (
+        SELECT CURDATE() - INTERVAL 29 DAY AS dt
+        UNION ALL
+        SELECT dt + INTERVAL 1 DAY FROM date_series
+        WHERE dt + INTERVAL 1 DAY <= CURDATE()
+    )
+    SELECT
+        ds.dt AS update_date,
+        COALESCE(COUNT(tbc.book_id), 0) AS chapter_count,
+        COALESCE(SUM(tbc.word_count), 0) AS total_word_count
+    FROM date_series ds
+    LEFT JOIN tomato_book_content tbc
+        ON DATE(tbc.update_time) = ds.dt
+        AND tbc.book_id = ?1
+    GROUP BY ds.dt
+    ORDER BY ds.dt ASC
+""", nativeQuery = true)
     List<Object[]> findStatsLast30Days(String bookId);
+
 }
