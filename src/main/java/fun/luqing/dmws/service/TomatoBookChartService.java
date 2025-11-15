@@ -1,8 +1,6 @@
 package fun.luqing.dmws.service;
 
-import fun.luqing.dmws.entity.dmw.TomatoBookList;
 import fun.luqing.dmws.repository.dmw.TomatoBookContentRepository;
-import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import io.quickchart.QuickChart;
 import lombok.RequiredArgsConstructor;
 import org.json.JSONObject;
@@ -30,7 +28,7 @@ public class TomatoBookChartService {
         List<Integer> wordCounts = new ArrayList<>();
 
         for (Object[] r : rows) {
-            dates.add(STR."\{r[0]}");
+            dates.add(String.valueOf(r[0]));
             chapterCounts.add(((Number) r[1]).intValue());
             wordCounts.add(((Number) r[2]).intValue());
         }
@@ -49,8 +47,8 @@ public class TomatoBookChartService {
 
 
         QuickChart chart = new QuickChart();
-        chart.setWidth(2000);
-        chart.setHeight(1200);
+        chart.setWidth(1000);
+        chart.setHeight(600);
         chart.setBackgroundColor("#dce4ef");
         chart.setVersion("2");
         chart.setConfig(String.valueOf(tempJson));
