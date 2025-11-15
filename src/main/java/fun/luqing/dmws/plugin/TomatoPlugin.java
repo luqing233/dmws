@@ -66,9 +66,13 @@ public class TomatoPlugin {
             sendGroupMessage(bot, groupId, "请指定书籍ID，例如：番茄订阅 123456");
             return;
         }
+        log.info("[番茄订阅] 群:{} 用户:{} 请求订阅 bookId={}", groupId, event.getUserId(), bookId);
+
 
         TomatoBookList book = tomatoBookListRepository.findByBookId(bookId).orElse(null);
         if (book == null) {
+            log.info("[番茄订阅] bookId={} 本地未记录，开始从API初始化书籍信息…", bookId);
+
             TomatoUpdateRecord rec = tomatoApiClient.getBookDetail1(bookId);
             if (rec == null) {
                 sendGroupMessage(bot, groupId, "无法获取书籍信息，请检查ID是否正确。");
@@ -103,11 +107,14 @@ public class TomatoPlugin {
                     insertCount++;
                 }
             }
+            log.info("[番茄订阅] 《{}》章节初始化完成，共 {} 章", book.getBookName(), insertCount);
+
 
             sendGroupMessage(bot, groupId, "已初始化《" + book.getBookName() + "》章节目录，共 " + insertCount + " 章。");
         }
 
         if (tomatoSubscriptionGroupRepository.findByGroupIdAndBookId(groupId, bookId).isPresent()) {
+            log.info("[番茄订阅] 群:{} 已订阅 bookId={}，忽略请求", groupId, bookId);
             sendGroupMessage(bot, groupId, "该书已订阅，无需重复。");
             return;
         }
@@ -119,6 +126,8 @@ public class TomatoPlugin {
         sub.setAtAll(atAll);
         sub.setEnable(true);
         tomatoSubscriptionGroupRepository.save(sub);
+
+        log.info("[番茄订阅] 群:{} 成功订阅 《{}》({})", groupId, book.getBookName(), bookId);
 
         sendGroupMessage(bot, groupId,
                 "订阅成功：\n《" + book.getBookName() + "》\n最新章节：" + book.getLastTitle() + "\n更新时间：" + book.getLastTime());
@@ -136,9 +145,12 @@ public class TomatoPlugin {
         long groupId = event.getGroupId();
         List<TomatoSubscriptionGroup> subscriptions = tomatoSubscriptionGroupRepository.findAllByGroupId(groupId);
         if (subscriptions.isEmpty()) {
+            log.info("[订阅列表] 群:{} 暂无订阅记录", groupId);
             sendGroupMessage(bot, groupId, "本群暂无订阅的书籍哦~");
             return;
         }
+        log.info("[订阅列表] 群:{} 用户:{} 请求查看订阅列表", groupId, event.getUserId());
+
 
         List<String> messageList = new ArrayList<>();
         messageList.add("📚 本群订阅列表：");
@@ -169,6 +181,7 @@ public class TomatoPlugin {
     public void getChapterList(Bot bot, GroupMessageEvent event) {
         long groupId = event.getGroupId();
         String param = event.getMessage().replace("获取目录", "").trim();
+
 
         if (param.isEmpty()) {
             sendGroupMessage(bot, groupId, "请输入订阅序号，例如：获取目录 1");
@@ -205,6 +218,7 @@ public class TomatoPlugin {
             return;
         }
 
+        log.info("[获取目录] 群:{} 用户:{} 请求 subId={}", groupId, event.getUserId(), subId);
         // 收集已有 realChapterOrder
         Set<Integer> existingOrders = new HashSet<>();
         for (TomatoBookContent c : chapters) {
@@ -215,6 +229,7 @@ public class TomatoPlugin {
         for (TomatoChapterRecord rec : records) {
             int order = rec.realChapterOrder();
             if (!existingOrders.contains(order)) {
+
                 TomatoBookContent chapter = new TomatoBookContent(
                         null,
                         bookId,
@@ -225,8 +240,10 @@ public class TomatoPlugin {
                         rec.firstPassTime(),
                         0
                 );
+
                 tomatoBookChapterRepository.save(chapter);
                 chapters.add(chapter); // 同步到本地列表
+                log.info("[获取目录] 检测到缺失章节：{}，已补全存库", rec.itemId());
             }
         }
 
@@ -292,9 +309,19 @@ public class TomatoPlugin {
             return;
         }
 
+
+
+
         TomatoBookContent chapter = chapters.get(chapterIndex - 1);
 
+
+        log.info("[获取章节内容] 群:{} 用户:{} subId={} chapterIndex={}",
+                groupId, event.getUserId(), subId, chapterIndex);
+
         if (chapter.getContent() == null) {
+
+            log.info("[获取章节内容] 本地无正文，正在从API获取内容 chapterId={}", chapter.getChapterId());
+
             TomatoContentRecord recode = tomatoApiClient.getChapterContent(chapter.getChapterId());
             if (recode != null) {
                 chapter.setContent(recode.content());
@@ -378,6 +405,10 @@ public class TomatoPlugin {
             return;
         }
 
+        log.info("[更新章节内容] 群:{} 用户:{} 请求更新 subId={} (bookId={})",
+                groupId, event.getUserId(), subId, bookId);
+
+
         sendGroupMessage(bot, groupId, "开始更新《" + book.getBookName() + "》的章节内容，共 " + chapters.size() + " 章，请稍候……");
 
         int successCount = 0;
@@ -392,8 +423,10 @@ public class TomatoPlugin {
                         chapter.setContent(record.content());
                         chapter.setWordCount(record.wordCount());
                         tomatoBookChapterRepository.save(chapter);
+                        log.info("[更新章节内容] chapterId={} 成功更新", chapter.getChapterId());
                         successCount++;
                     } else {
+                        log.info("[更新章节内容] chapterId={} 更新失败", chapter.getChapterId());
                         failCount++;
                     }
 
@@ -405,6 +438,7 @@ public class TomatoPlugin {
             }
         }
 
+        log.info("[更新章节内容] 《{}》 更新完成：成功 {}，失败 {}", book.getBookName(), successCount, failCount);
         String resultMsg = String.format("《%s》章节内容更新完成。\n成功：%d 章\n失败：%d 章",
                 book.getBookName(), successCount, failCount);
         sendGroupMessage(bot, groupId, resultMsg);
@@ -447,6 +481,9 @@ public class TomatoPlugin {
             sendGroupMessage(bot, groupId, "书籍不存在。");
             return;
         }
+        log.info("[获取更新图表] 群:{} 用户:{} 请求 subId={}",
+                groupId, event.getUserId(), subId);
+
 
         String chartUrl;
         try {
@@ -455,8 +492,10 @@ public class TomatoPlugin {
             sendGroupMessage(bot, groupId, "生成图表失败：" + e.getMessage());
             return;
         }
+        log.info("[获取更新图表] 《{}》 图表生成成功：{}", book.getBookName(), chartUrl);
 
-        bot.sendGroupMsg(groupId, MsgUtils.builder().text(STR."《\{book.getBookName()}》最近30天更新情况为\n").img(chartUrl).build(), false);
+
+        bot.sendGroupMsg(groupId, MsgUtils.builder().text("《"+book.getBookName()+"》最近30天更新情况为\n").img(chartUrl).build(), false);
 
 
     }
@@ -477,8 +516,11 @@ public class TomatoPlugin {
             return;
         }
 
+
         try {
             Long id = Long.parseLong(matcher.group(1));
+            log.info("[取消订阅] 群:{} 用户:{} 请求取消 subId={}", groupId, event.getUserId(), id);
+
             Optional<TomatoSubscriptionGroup> optional = tomatoSubscriptionGroupRepository.findById(id);
             if (optional.isEmpty()) {
                 sendGroupMessage(bot, groupId, "未找到 ID 为 " + id + " 的订阅。");
@@ -492,6 +534,8 @@ public class TomatoPlugin {
             }
 
             tomatoSubscriptionGroupRepository.deleteById(id);
+            log.info("[取消订阅] 群:{} 已取消订阅 bookId={}", groupId, sub.getBookId());
+
             sendGroupMessage(bot, groupId, "已取消订阅：" + sub.getBookId());
 
         } catch (Exception e) {
@@ -530,6 +574,10 @@ public class TomatoPlugin {
                     book.setLastTitle(info.lastChapterTitle());
                     book.setLastTime(info.lastPublishTime());
                     tomatoBookListRepository.save(book);
+
+                    log.info("[定时更新] 《{}》 发现新章节：{}({})",
+                            book.getBookName(), info.lastChapterTitle(), info.lastChapterId());
+
 
                     //保存新章节
                     TomatoContentRecord recode = tomatoApiClient.getChapterContent(info.lastChapterId());
@@ -572,7 +620,7 @@ public class TomatoPlugin {
     private void notifyGroups(TomatoBookList book, Bot bot) {
         List<TomatoSubscriptionGroup> groups = tomatoSubscriptionGroupRepository.findAllByBookId(book.getBookId());
         String msg = "📢 《" + book.getBookName() + "》更新啦！\n最新章节：" + book.getLastTitle() + "\n更新时间：" + book.getLastTime();
-        log.info("发送书籍更新消息{}",msg);
+        log.info("[定时更新] 开始群通知：《{}》更新", book.getBookName());
         for (TomatoSubscriptionGroup g : groups) {
             sendGroupMessage(bot, g.getGroupId(), msg);
         }
