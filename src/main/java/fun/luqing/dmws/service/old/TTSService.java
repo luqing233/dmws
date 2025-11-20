@@ -1,4 +1,4 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.old;
 
 import org.json.JSONObject;
 import org.slf4j.Logger;

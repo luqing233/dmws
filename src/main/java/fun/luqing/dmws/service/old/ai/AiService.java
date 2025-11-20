@@ -1,4 +1,4 @@
-package fun.luqing.dmws.service.ai;
+package fun.luqing.dmws.service.old.ai;
 
 import org.json.JSONArray;
 

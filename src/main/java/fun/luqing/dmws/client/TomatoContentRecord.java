@@ -1,4 +1,4 @@
-package fun.luqing.dmws.utils;
+package fun.luqing.dmws.client;
 
 public record TomatoContentRecord(
         String bookId,

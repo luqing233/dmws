@@ -1,11 +1,11 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.old;
 
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.entity.economy.EconomyBalanceRecord;
 import fun.luqing.dmws.enums.AiStatus;
 import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository;
-import fun.luqing.dmws.utils.AiResponse;
-import fun.luqing.dmws.utils.AiUtil;
+import fun.luqing.dmws.common.utils.AiResponse;
+import fun.luqing.dmws.common.utils.AiUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

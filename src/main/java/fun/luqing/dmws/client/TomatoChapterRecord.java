@@ -1,4 +1,4 @@
-package fun.luqing.dmws.utils;
+package fun.luqing.dmws.client;
 
 public record TomatoChapterRecord(
         String itemId,          // 章节 ID

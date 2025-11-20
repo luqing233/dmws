@@ -1,22 +1,17 @@
-package fun.luqing.dmws.service.ai.impl;
+package fun.luqing.dmws.service.old.ai.impl;
 
 import cn.hutool.ai.AIServiceFactory;
 import cn.hutool.ai.ModelName;
 import cn.hutool.ai.core.AIConfigBuilder;
-import cn.hutool.ai.core.Message;
 import cn.hutool.ai.model.deepseek.DeepSeekService;
 import fun.luqing.dmws.config.ConfigManager;
-import fun.luqing.dmws.service.ai.AiResult;
-import fun.luqing.dmws.service.ai.AiService;
+import fun.luqing.dmws.service.old.ai.AiResult;
+import fun.luqing.dmws.service.old.ai.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * DeepSeek 模型实现类

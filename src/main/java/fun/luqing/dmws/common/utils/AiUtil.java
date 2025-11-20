@@ -1,11 +1,11 @@
-package fun.luqing.dmws.utils;
+package fun.luqing.dmws.common.utils;
 
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.entity.dmw.AiContext;
 import fun.luqing.dmws.enums.AiModelType;
 import fun.luqing.dmws.repository.dmw.AiContextRepository;
-import fun.luqing.dmws.service.ai.AiResult;
-import fun.luqing.dmws.service.ai.AiService;
+import fun.luqing.dmws.service.old.ai.AiResult;
+import fun.luqing.dmws.service.old.ai.AiService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

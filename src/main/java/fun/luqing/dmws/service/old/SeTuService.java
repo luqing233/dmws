@@ -1,6 +1,6 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.old;
 
-import fun.luqing.dmws.utils.HttpUtil;
+import fun.luqing.dmws.common.utils.HttpUtil;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;

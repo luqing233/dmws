@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface TomatoBookContentRepository extends JpaRepository<TomatoBookContent, Long> {
 
@@ -28,4 +29,19 @@ public interface TomatoBookContentRepository extends JpaRepository<TomatoBookCon
 """, nativeQuery = true)
     List<Object[]> findStatsLast30Days(String bookId);
 
+    List<TomatoBookContent> findByBookIdOrderByRealChapterOrderAsc(String bookId);
+
+    Optional<TomatoBookContent> findByBookIdAndChapterId(String bookId, String chapterId);
+
+    void deleteByBookId(String bookId);
+
+    void deleteByBookIdAndChapterId(String bookId, String chapterId);
+
+    Optional<TomatoBookContent> findByChapterId(String chapterId);
+
+    void deleteByChapterId(String chapterId);
+
+    List<TomatoBookContent> findAllByBookIdOrderByRealChapterOrderAsc(String bookId);
+
+    List<TomatoBookContent> findAllByBookIdOrderByRealChapterOrderDesc(String bookId);
 }

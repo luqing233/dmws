@@ -6,7 +6,7 @@ import com.mikuac.shiro.annotation.common.Shiro;
 import com.mikuac.shiro.common.utils.ShiroUtils;
 import com.mikuac.shiro.core.Bot;
 import com.mikuac.shiro.dto.event.message.AnyMessageEvent;
-import fun.luqing.dmws.annotation.CommandInfo;
+import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.enums.AiModelType;
 import lombok.RequiredArgsConstructor;

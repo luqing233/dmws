@@ -1,4 +1,4 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.old;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;

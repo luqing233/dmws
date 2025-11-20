@@ -1,4 +1,4 @@
-package fun.luqing.dmws.annotation;
+package fun.luqing.dmws.common.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

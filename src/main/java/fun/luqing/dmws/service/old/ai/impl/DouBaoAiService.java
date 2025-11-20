@@ -1,29 +1,23 @@
-package fun.luqing.dmws.service.ai.impl;
+package fun.luqing.dmws.service.old.ai.impl;
 
 import cn.hutool.ai.AIServiceFactory;
 import cn.hutool.ai.ModelName;
 
 import cn.hutool.ai.core.AIConfigBuilder;
-import cn.hutool.ai.core.Message;
-import cn.hutool.ai.model.doubao.DoubaoCommon;
 import cn.hutool.ai.model.doubao.DoubaoService;
 import fun.luqing.dmws.config.ConfigManager;
-import fun.luqing.dmws.service.ai.AiResult;
-import fun.luqing.dmws.service.ai.AiService;
+import fun.luqing.dmws.service.old.ai.AiResult;
+import fun.luqing.dmws.service.old.ai.AiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
-import java.awt.*;
-import java.util.*;
 
 import cn.hutool.core.img.ImgUtil;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.io.File;
-import java.net.URL;
-import java.util.List;
 
 /**
  * DouBao 模型实现类（支持文本、图像理解、视频生成）

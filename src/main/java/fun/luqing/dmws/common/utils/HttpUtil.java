@@ -1,4 +1,4 @@
-package fun.luqing.dmws.utils;
+package fun.luqing.dmws.common.utils;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

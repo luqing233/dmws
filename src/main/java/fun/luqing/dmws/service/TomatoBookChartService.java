@@ -10,18 +10,18 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
-import static fun.luqing.dmws.utils.TempJsonUtil.getJsonFromTemp;
+import static fun.luqing.dmws.common.utils.TempJsonUtil.getJsonFromTemp;
 
 @Service
 @RequiredArgsConstructor
 public class TomatoBookChartService {
 
-    private final TomatoBookContentRepository tomatoBookContentRepository;
+    private final TomatoBookContentService tomatoBookContentService;
 
     public String generateBook30DaysChart(String bookId,String bookName) {
 
         // 查询最近 30 天数据
-        List<Object[]> rows = tomatoBookContentRepository.findStatsLast30Days(bookId);
+        List<Object[]> rows = tomatoBookContentService.findStatsLast30Days(bookId);
 
         List<String> dates = new ArrayList<>();
         List<Integer> chapterCounts = new ArrayList<>();

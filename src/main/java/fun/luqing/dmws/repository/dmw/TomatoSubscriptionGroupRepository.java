@@ -10,4 +10,8 @@ public interface TomatoSubscriptionGroupRepository extends JpaRepository<TomatoS
     Optional<TomatoSubscriptionGroup> findByGroupIdAndBookId(long groupId, String bookId);
     List<TomatoSubscriptionGroup> findAllByGroupId(long groupId);
     List<TomatoSubscriptionGroup> findAllByBookId(String bookId);
+
+    List<TomatoSubscriptionGroup> findByGroupId(long groupId);
+
+    List<TomatoSubscriptionGroup> findByBookId(String bookId);
 }

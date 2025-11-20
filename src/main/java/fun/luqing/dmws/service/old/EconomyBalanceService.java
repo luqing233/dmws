@@ -1,4 +1,4 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.old;
 
 import fun.luqing.dmws.entity.economy.EconomyBalanceRecord;
 import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository;
