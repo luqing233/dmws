@@ -35,6 +35,8 @@ public class SeTuPlugin {
     @Async("taskExecutor")
     @CommandInfo(startWith = "涩图 ", desc = "获取指定tag的涩图")
     public void getSeTu(Bot bot, AnyMessageEvent event){
+
+
         try {
             String msgText = event.getMessage().trim();
             // 确认前缀

@@ -1,6 +1,7 @@
 package fun.luqing.dmws.plugin;
 
-import com.mikuac.shiro.annotation.*;
+import com.mikuac.shiro.annotation.AnyMessageHandler;
+import com.mikuac.shiro.annotation.MessageHandlerFilter;
 import com.mikuac.shiro.annotation.common.Shiro;
 import com.mikuac.shiro.core.Bot;
 import com.mikuac.shiro.dto.event.message.AnyMessageEvent;

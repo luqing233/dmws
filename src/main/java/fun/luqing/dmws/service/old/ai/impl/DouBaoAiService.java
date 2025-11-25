@@ -2,9 +2,9 @@ package fun.luqing.dmws.service.old.ai.impl;
 
 import cn.hutool.ai.AIServiceFactory;
 import cn.hutool.ai.ModelName;
-
 import cn.hutool.ai.core.AIConfigBuilder;
 import cn.hutool.ai.model.doubao.DoubaoService;
+import cn.hutool.core.img.ImgUtil;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.service.old.ai.AiResult;
 import fun.luqing.dmws.service.old.ai.AiService;
@@ -14,9 +14,8 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 
-import cn.hutool.core.img.ImgUtil;
-import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.File;
 
 /**

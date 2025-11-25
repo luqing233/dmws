@@ -30,6 +30,7 @@ public class FunPlugin {
     public void gatherArms(Bot bot, GroupMessageEvent event) {
         log.info("触发事件：可汗大点兵");
 
+
         // 禁止凌晨 0 点到 8 点
         int hour = java.time.LocalTime.now().getHour();
         if (hour < 8) {

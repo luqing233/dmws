@@ -1,6 +1,5 @@
 package fun.luqing.dmws.entity.dmw;
 
-import fun.luqing.dmws.enums.BookStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;

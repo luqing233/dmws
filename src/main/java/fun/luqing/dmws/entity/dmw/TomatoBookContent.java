@@ -36,4 +36,5 @@ public class TomatoBookContent {
     private String updateTime; // 更新时间
 
     private Integer wordCount; //章节字数
+
 }

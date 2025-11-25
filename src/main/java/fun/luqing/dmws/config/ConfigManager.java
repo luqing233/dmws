@@ -1,7 +1,9 @@
 package fun.luqing.dmws.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mikuac.shiro.core.BotContainer;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,10 @@ public class ConfigManager {
 
     private static final String CONFIG_PATH = "config/config.json";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+
+    @Resource
+    private final BotContainer botContainer = new BotContainer();
 
     private DmwConfig dmwConfig;
 

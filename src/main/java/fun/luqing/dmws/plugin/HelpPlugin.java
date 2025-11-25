@@ -17,7 +17,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 @Shiro
 @Component
@@ -26,7 +28,7 @@ import java.util.*;
 public class HelpPlugin {
 
     private final ConfigManager configManager;
-    private final ApplicationContext applicationContext; // ✅ 注入Spring上下文
+    private final ApplicationContext applicationContext; //注入Spring上下文
 
     @AnyMessageHandler
     @MessageHandlerFilter(cmd = "指令列表")
@@ -98,6 +100,7 @@ public class HelpPlugin {
                 }
             }
         }
+
         return false;
     }
 }

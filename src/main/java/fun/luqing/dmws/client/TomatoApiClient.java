@@ -3,24 +3,33 @@ package fun.luqing.dmws.client;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-
+import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @Component
 public class TomatoApiClient {
+
+    private static final String DETAIL_API_1 = "https://api.cenguigui.cn/api/tomato/api/detail.php?book_id=";
+
+    private static final String DETAIL_API_2 = "http://49.232.137.12/api/detail?book_id=";
+
+    private static final String CHAPTER_CONTENT_API = "http://49.232.137.12/api/raw_full?item_id=";
+
+    private static final String BOOK_CATALOG_API = "http://49.232.137.12/api/book?book_id=";
+
+    private static final DateTimeFormatter FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
 
     private final RestTemplate restTemplate;
 
@@ -28,6 +37,12 @@ public class TomatoApiClient {
         this.restTemplate = createRestTemplate();
     }
 
+    /**
+     * 创建并配置一个RestTemplate实例，用于进行HTTP请求。
+     * 此方法设置连接和读取超时时间为5000毫秒。
+     *
+     * @return 配置好的RestTemplate实例
+     */
     private RestTemplate createRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(5000);
@@ -35,148 +50,252 @@ public class TomatoApiClient {
         return new RestTemplate(factory);
     }
 
-    public TomatoUpdateRecord getBookDetail(String bookId) {
-        int random = java.util.concurrent.ThreadLocalRandom.current().nextInt(2);
-        if (random == 0) {
-            return getBookDetail1(bookId);
-        } else {
-            return getBookDetail2(bookId);
-        }
-    }
+    // ===============================
+    //   通用工具方法
+    // ===============================
 
-    public TomatoUpdateRecord getBookDetail1(String bookId) {
-        String url = "https://api.cenguigui.cn/api/tomato/api/detail.php?book_id=" + bookId;
-
+    /**
+     * 发送HTTP GET请求并获取响应内容。
+     *
+     * @param url 请求的URL地址
+     * @return 响应的内容，如果请求失败则返回null
+     */
+    private String httpGet(String url) {
         try {
-            HttpHeaders headers = new HttpHeaders();
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            return restTemplate.getForObject(url, String.class);
+        } catch (Exception e1) {
+            log.warn("HTTP 请求失败（第一次）: url={} err={}", url, e1.getMessage());
 
-            JSONObject resp = new JSONObject(response.getBody());
-            JSONObject data = resp.getJSONObject("data");
+            // 等待 3 秒后重试一次
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException ignored) {}
 
-            String bookName = data.getString("original_book_name");
-            String lastChapterTitle = data.getString("last_chapter_title");
-            String lastChapterId = data.getString("last_chapter_item_id");
-            long lastPublishTimestamp = data.getLong("last_publish_time");
-            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String lastPublishTime = dateFormat.format(new Date(lastPublishTimestamp * 1000));
-            long totalWords = data.getLong("word_number");
-
-            return new TomatoUpdateRecord(bookName, lastChapterTitle, lastChapterId, lastPublishTime, totalWords);
-        } catch (Exception e) {
-            log.error("请求番茄API失败: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    public TomatoUpdateRecord getBookDetail2(String bookId) {
-        String url = "https://fq.shusan.cn/api/detail?book_id=" + bookId;
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-
-            JSONObject resp = new JSONObject(response.getBody());
-            JSONObject data = resp.getJSONObject("data").getJSONObject("data");
-
-            String bookName = data.getString("book_name");
-            String lastChapterTitle = data.getString("last_chapter_title");
-            String lastChapterId = data.getString("last_chapter_item_id");
-            long lastPublishTimestamp = data.getLong("last_chapter_update_time");
-            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String lastPublishTime = dateFormat.format(new Date(lastPublishTimestamp * 1000));
-            long totalWords = data.getLong("word_number");
-
-            return new TomatoUpdateRecord(bookName, lastChapterTitle, lastChapterId, lastPublishTime, totalWords);
-        } catch (Exception e) {
-            log.error("请求番茄API失败: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    public TomatoContentRecord getChapterContent(String chapterId) {
-        String url = "https://fq.shusan.cn/api/raw_full?tab=小说&item_id=" + chapterId;
-
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-
-            JSONObject resp = new JSONObject(response.getBody());
-            JSONObject data = resp.getJSONObject("data");
-            JSONObject novelData = data.getJSONObject("novel_data");
-
-            String bookId = novelData.getString("book_id");
-            String bookName = novelData.getString("book_name");
-            int realChapterOrder = novelData.getInt("real_chapter_order");
-            String title = novelData.getString("title");
-            String content = data.getString("content");
-
-            String updateTime = "";
-            if (novelData.has("first_pass_time")) {
-                try {
-                    long timestamp = Long.parseLong(novelData.getString("first_pass_time"));
-                    LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneId.of("Asia/Shanghai"));
-                    updateTime = dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                } catch (Exception ignore) {}
+            try {
+                //log.info("重试请求: {}", url);
+                return restTemplate.getForObject(url, String.class);
+            } catch (Exception e2) {
+                log.error("HTTP 请求失败（第二次）: url={} err={}", url, e2.getMessage());
+                return null;
             }
+        }
+    }
 
-            int wordCount = novelData.getInt("chapter_word_number");
-            return new TomatoContentRecord(bookId, bookName, realChapterOrder, title, content, updateTime, wordCount);
+
+    /**
+     * 将给定的纪元时间转换为"Asia/Shanghai"时区的格式化日期字符串。
+     *
+     * @param epoch 纪元时间（秒）
+     * @return 如果转换成功，则返回格式化的日期字符串，否则返回空字符串
+     */
+    private String formatEpoch(long epoch) {
+        if (epoch <= 0) return "";
+        try {
+            return LocalDateTime.ofInstant(
+                    Instant.ofEpochSecond(epoch),
+                    ZoneId.of("Asia/Shanghai")
+            ).format(FORMATTER);
         } catch (Exception e) {
-            log.error("获取章节内容失败: {}", e.getMessage(), e);
+            return "";
+        }
+    }
+
+    /**
+     * 从给定的父JSONObject中安全地检索指定键的子JSONObject。
+     * 如果未找到子JSONObject，则记录警告并返回null。
+     *
+     * @param obj 要从中检索子项的父JSONObject。
+     * @param key 要检索的子JSONObject的键。
+     * @return 如果找到子JSONObject则返回，如果父JSONObject中不存在该键则返回null。
+     */
+    private JSONObject safe(JSONObject obj, String key) {
+        JSONObject child = obj.optJSONObject(key);
+        if (child == null) log.warn("JSON 缺少字段 {}", key);
+        return child;
+    }
+
+    // ===============================
+    //   API 业务方法
+    // ===============================
+
+    /**
+     * 获取书籍详情信息。
+     * 该方法首先随机选择一个数据源尝试获取书籍详情，如果第一个数据源返回为空，则会尝试从另一个数据源获取。
+     * 如果两个数据源都未能提供有效信息，则记录错误日志并返回最后一个尝试的数据源结果（可能为null）。
+     *
+     * @param bookId 书籍的唯一标识符
+     * @return 返回包含书籍最新章节标题、ID、发布时间及总字数等信息的TomatoUpdateRecord对象；若所有数据源均未找到相关信息，则返回null。
+     */
+    public TomatoUpdateRecord getBookDetail(String bookId) {
+
+        boolean useFirst = ThreadLocalRandom.current().nextBoolean();
+
+        TomatoUpdateRecord first = useFirst ? getBookDetailFromSource1(bookId)
+                : getBookDetailFromSource2(bookId);
+
+        if (first != null) return first;
+
+        log.warn("随机选择的数据源 {} 返回 null，尝试另一数据源", useFirst ? "源1" : "源2");
+
+        TomatoUpdateRecord second = useFirst ? getBookDetailFromSource2(bookId)
+                : getBookDetailFromSource1(bookId);
+
+        if (second == null) {
+            log.error("两个数据源都返回 null，bookId={}", bookId);
+        }
+
+        return second;
+    }
+
+    /**
+     * 从数据源1获取书籍详情。
+     * @param bookId 书籍ID
+     * @return 返回一个包含书籍详细信息的TomatoUpdateRecord对象，如果获取失败则返回null
+     */
+    private TomatoUpdateRecord getBookDetailFromSource1(String bookId) {
+        String body = httpGet(DETAIL_API_1 + bookId);
+        if (body == null) return null;
+
+        try {
+            JSONObject root = new JSONObject(body);
+            JSONObject data = safe(root, "data");
+            if (data == null) return null;
+
+            return new TomatoUpdateRecord(
+                    data.optString("original_book_name"),
+                    data.optString("last_chapter_title"),
+                    data.optString("last_chapter_item_id"),
+                    formatEpoch(data.optLong("last_publish_time")),
+                    data.optLong("word_number")
+            );
+
+        } catch (Exception e) {
+            log.error("解析数据源 1 失败: {}", e.getMessage());
             return null;
         }
     }
 
-    public List<TomatoChapterRecord> getChapters(String bookId) {
-        String url = "https://fq.shusan.cn/api/book?book_id=" + bookId;
-        List<TomatoChapterRecord> chapters = new ArrayList<>();
+    /**
+     * 从数据源2获取书籍详情。
+     * @param bookId 书籍ID
+     * @return 返回包含书籍名称、最新章节标题、最新章节ID、最后更新时间和总字数的TomatoUpdateRecord对象，如果获取失败则返回null。
+     */
+    private TomatoUpdateRecord getBookDetailFromSource2(String bookId) {
+        String body = httpGet(DETAIL_API_2 + bookId);
+        if (body == null) return null;
 
         try {
-            HttpHeaders headers = new HttpHeaders();
-            HttpEntity<String> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
+            JSONObject root = new JSONObject(body);
+            JSONObject dataWrapper = safe(root, "data");
+            if (dataWrapper == null) return null;
 
-            JSONObject root = new JSONObject(response.getBody());
-            JSONObject data = root.getJSONObject("data").getJSONObject("data");
+            JSONObject data = safe(dataWrapper, "data");
+            if (data == null) return null;
 
-            JSONArray volumes = data.getJSONArray("chapterListWithVolume");
+            return new TomatoUpdateRecord(
+                    data.optString("book_name"),
+                    data.optString("last_chapter_title"),
+                    data.optString("last_chapter_item_id"),
+                    formatEpoch(data.optLong("last_chapter_update_time")),
+                    data.optLong("word_number")
+            );
+
+        } catch (Exception e) {
+            log.error("解析数据源 2 失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 根据章节ID获取特定章节的内容。
+     *
+     * @param chapterId 要获取的章节的唯一标识符。
+     * @return 包含章节详细信息和内容的TomatoContentRecord对象，如果无法获取章节则返回null。
+     */
+    public TomatoContentRecord getChapterContent(String chapterId) {
+        String body = httpGet(CHAPTER_CONTENT_API + chapterId);
+        if (body == null) return null;
+
+        try {
+            JSONObject root = new JSONObject(body);
+            JSONObject data = safe(root, "data");
+            if (data == null) return null;
+
+            JSONObject novel = safe(data, "novel_data");
+            if (novel == null) return null;
+
+            String updateTime = formatEpoch(
+                    novel.optLong("first_pass_time", 0)
+            );
+
+            return new TomatoContentRecord(
+                    novel.optString("book_id"),
+                    novel.optString("book_name"),
+                    novel.optInt("real_chapter_order"),
+                    novel.optString("title"),
+                    data.optString("content"),
+                    updateTime,
+                    novel.optInt("chapter_word_number")
+            );
+
+        } catch (Exception e) {
+            log.error("解析章节内容失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 获取指定书籍的所有章节信息。
+     * @param bookId 书籍的唯一标识符
+     * @return 返回一个包含所有章节记录的列表，如果获取失败则返回空列表
+     */
+    public List<TomatoChapterRecord> getChapters(String bookId) {
+        List<TomatoChapterRecord> list = new ArrayList<>();
+
+        String body = httpGet(BOOK_CATALOG_API + bookId);
+        if (body == null) return list;
+
+        try {
+            JSONObject root = new JSONObject(body);
+            JSONObject dataWrapper = safe(root, "data");
+            if (dataWrapper == null) return list;
+
+            JSONObject data = safe(dataWrapper, "data");
+            if (data == null) return list;
+
+            JSONArray volumes = data.optJSONArray("chapterListWithVolume");
+            if (volumes == null) return list;
+
             for (int i = 0; i < volumes.length(); i++) {
-                JSONArray volume = volumes.getJSONArray(i);
+                JSONArray volume = volumes.optJSONArray(i);
+                if (volume == null) continue;
+
                 for (int j = 0; j < volume.length(); j++) {
-                    JSONObject chapterObj = volume.getJSONObject(j);
+                    JSONObject ch = volume.optJSONObject(j);
+                    if (ch == null) continue;
 
-                    String firstPassTime = "";
-                    if (chapterObj.has("firstPassTime")) {
-                        try {
-                            long timestamp = Long.parseLong(chapterObj.getString("firstPassTime"));
-                            LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(timestamp), ZoneId.of("Asia/Shanghai"));
-                            firstPassTime = dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-                        } catch (Exception ignore) {}
-                    }
-
-                    TomatoChapterRecord chapter = new TomatoChapterRecord(
-                            chapterObj.optString("itemId", ""),
-                            chapterObj.optString("title", ""),
-                            chapterObj.optString("volume_name", ""),
-                            chapterObj.optBoolean("isChapterLock", false),
-                            chapterObj.optBoolean("isPaidPublication", false),
-                            chapterObj.optBoolean("isPaidStory", false),
-                            chapterObj.optInt("needPay", 0),
-                            chapterObj.optInt("realChapterOrder", 0),
-                            firstPassTime
+                    String firstPassTime = formatEpoch(
+                            ch.optLong("firstPassTime")
                     );
 
-                    chapters.add(chapter);
+                    list.add(new TomatoChapterRecord(
+                            ch.optString("itemId"),
+                            ch.optString("title"),
+                            ch.optString("volume_name"),
+                            ch.optBoolean("isChapterLock"),
+                            ch.optBoolean("isPaidPublication"),
+                            ch.optBoolean("isPaidStory"),
+                            ch.optInt("needPay"),
+                            ch.optInt("realChapterOrder"),
+                            firstPassTime
+                    ));
                 }
             }
 
         } catch (Exception e) {
-            log.error("获取章节列表失败: {}", e.getMessage(), e);
+            log.error("解析章节目录失败: {}", e.getMessage());
         }
-        return chapters;
+
+        return list;
     }
 }

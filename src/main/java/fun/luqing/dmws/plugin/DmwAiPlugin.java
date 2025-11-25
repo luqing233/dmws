@@ -13,6 +13,8 @@ import com.mikuac.shiro.dto.event.notice.PokeNoticeEvent;
 import com.mikuac.shiro.enums.AtEnum;
 import com.mikuac.shiro.enums.MsgTypeEnum;
 import fun.luqing.dmws.common.annotation.CommandInfo;
+import fun.luqing.dmws.common.utils.AiResponse;
+import fun.luqing.dmws.common.utils.AiUtil;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.entity.dmw.AiContext;
 import fun.luqing.dmws.enums.AiModelType;
@@ -21,8 +23,6 @@ import fun.luqing.dmws.repository.dmw.AiContextRepository;
 import fun.luqing.dmws.service.old.AiChatService;
 import fun.luqing.dmws.service.old.CheckTTSStatus;
 import fun.luqing.dmws.service.old.TTSService;
-import fun.luqing.dmws.common.utils.AiResponse;
-import fun.luqing.dmws.common.utils.AiUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
@@ -210,6 +210,7 @@ public class DmwAiPlugin {
         if(helpPlugin.isCommandExist(message)){
             return;
         }
+        String groupName = bot.getGroupInfo(event.getGroupId(),false).getData().getGroupName();
 
         if (message.isEmpty()) {
             message = "（该用户什么都没有说）";
@@ -217,7 +218,7 @@ public class DmwAiPlugin {
         if (event.getMessageType().equals("private")) {
             log.info("私聊消息 {}:{}", name, message);
         } else {
-            log.info("{} {}:{}", event.getGroupId(), name, message);
+            log.info("{} {}:{}", groupName, name, message);
         }
 
         AiResponse response = aiChatService.talkWithAi(userId, name, message);
