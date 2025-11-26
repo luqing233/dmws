@@ -126,15 +126,16 @@ public class TomatoBookContentService {
             return new UpdateResult(localChapters.size(), 0, 0,0);
         }
 
-        Set<Integer> existingOrders = localChapters.stream()
-                .map(TomatoBookContent::getRealChapterOrder)
-                .collect(Collectors.toSet());
+        Set<String> existingChapterIds =
+                localChapters.stream()
+                        .map(TomatoBookContent::getChapterId)
+                        .collect(Collectors.toSet());
 
         int addedCount = 0;
         int failCount = 0;
 
         for (TomatoChapterRecord rec : remoteChapters) {
-            if (!existingOrders.contains(rec.realChapterOrder())) {
+            if (!existingChapterIds.contains(rec.itemId())) {
                 try {
                     TomatoBookContent chapter = new TomatoBookContent(
                             null,
