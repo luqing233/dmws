@@ -1,6 +1,6 @@
 package fun.luqing.dmws.repository.dmw;
 
-import fun.luqing.dmws.entity.dmw.TomatoSubscriptionGroup;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

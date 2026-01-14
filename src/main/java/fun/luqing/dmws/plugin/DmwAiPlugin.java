@@ -210,14 +210,15 @@ public class DmwAiPlugin {
         if(helpPlugin.isCommandExist(message)){
             return;
         }
-        String groupName = bot.getGroupInfo(event.getGroupId(),false).getData().getGroupName();
 
+        String groupName="";
         if (message.isEmpty()) {
             message = "（该用户什么都没有说）";
         }
         if (event.getMessageType().equals("private")) {
             log.info("私聊消息 {}:{}", name, message);
         } else {
+            groupName = bot.getGroupInfo(event.getGroupId(),false).getData().getGroupName();
             log.info("{} {}:{}", groupName, name, message);
         }
 

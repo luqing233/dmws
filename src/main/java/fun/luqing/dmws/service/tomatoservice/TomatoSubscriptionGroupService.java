@@ -1,7 +1,7 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.tomatoservice;
 
-import fun.luqing.dmws.entity.dmw.TomatoBookList;
-import fun.luqing.dmws.entity.dmw.TomatoSubscriptionGroup;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
 import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import fun.luqing.dmws.repository.dmw.TomatoSubscriptionGroupRepository;
 import lombok.RequiredArgsConstructor;

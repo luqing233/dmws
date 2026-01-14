@@ -1,4 +1,4 @@
-package fun.luqing.dmws.entity.dmw;
+package fun.luqing.dmws.entity.dmw.tomato;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

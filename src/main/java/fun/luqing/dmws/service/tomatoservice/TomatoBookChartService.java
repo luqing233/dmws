@@ -1,4 +1,4 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.tomatoservice;
 
 import io.quickchart.QuickChart;
 import lombok.RequiredArgsConstructor;

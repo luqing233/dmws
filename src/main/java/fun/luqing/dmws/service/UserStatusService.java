@@ -1,7 +1,6 @@
 package fun.luqing.dmws.service;
 
-import fun.luqing.dmws.entity.dmw.UserStatus;
-import fun.luqing.dmws.enums.PlaceEnum;
+import fun.luqing.dmws.entity.dmw.user.UserStatus;
 import fun.luqing.dmws.repository.dmw.UserStatusRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,12 +56,12 @@ public class UserStatusService {
      * @param place  用户的新地点，必须是PlaceEnum枚举中的一个值
      */
 
-    public void updatePlace(Long userId, PlaceEnum place) {
+/*    public void updatePlace(Long userId, PlaceEnum place) {
         repository.findById(userId).ifPresent(us -> {
             us.setPlace(place);
             repository.save(us);
         });
-    }
+    }*/
 
     /**
      * 更新指定用户的恢复时间。

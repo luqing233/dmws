@@ -1,4 +1,4 @@
-package fun.luqing.dmws.entity.dmw;
+package fun.luqing.dmws.entity.dmw.fish;
 
 import jakarta.persistence.*;
 import lombok.Data;

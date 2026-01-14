@@ -5,7 +5,7 @@ import fun.luqing.dmws.common.utils.AiUtil;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.entity.economy.EconomyBalanceRecord;
 import fun.luqing.dmws.enums.AiStatus;
-import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository;
+import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository1;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class AiChatService {
     @Resource
     private ConfigManager configManager;
     @Resource
-    private EconomyBalanceRecordRepository economyRepo;
+    private EconomyBalanceRecordRepository1 economyRepo;
 
     private static final String CONTEXT = "global-economy";
     private static final String CURRENCY = "hy-gold";

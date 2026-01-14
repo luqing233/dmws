@@ -1,6 +1,6 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.tomatoservice;
 
-import fun.luqing.dmws.entity.dmw.TomatoBookList;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

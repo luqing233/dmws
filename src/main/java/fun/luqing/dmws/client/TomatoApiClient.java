@@ -19,13 +19,13 @@ import java.util.concurrent.ThreadLocalRandom;
 @Component
 public class TomatoApiClient {
 
-    private static final String DETAIL_API_1 = "https://api.cenguigui.cn/api/tomato/api/detail.php?book_id=";
 
-    private static final String DETAIL_API_2 = "http://49.232.137.12/api/detail?book_id=";
+//https://qkfqapi.vv9v.cn/api/search
+    private static final String DETAIL_API_2 = "https://qkfqapi.vv9v.cn/api/detail?book_id=";
 
-    private static final String CHAPTER_CONTENT_API = "http://49.232.137.12/api/raw_full?item_id=";
+    private static final String CHAPTER_CONTENT_API = "https://qkfqapi.vv9v.cn/api/raw_full?item_id=";
 
-    private static final String BOOK_CATALOG_API = "http://49.232.137.12/api/book?book_id=";
+    private static final String BOOK_CATALOG_API = "https://qkfqapi.vv9v.cn/api/book?book_id=";
 
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -39,14 +39,14 @@ public class TomatoApiClient {
 
     /**
      * 创建并配置一个RestTemplate实例，用于进行HTTP请求。
-     * 此方法设置连接和读取超时时间为5000毫秒。
+     * 此方法设置连接和读取超时时间为30000毫秒。
      *
      * @return 配置好的RestTemplate实例
      */
     private RestTemplate createRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(5000);
+        factory.setConnectTimeout(30000);
+        factory.setReadTimeout(30000);
         return new RestTemplate(factory);
     }
 
@@ -114,73 +114,13 @@ public class TomatoApiClient {
         return child;
     }
 
-    // ===============================
-    //   API 业务方法
-    // ===============================
-
-    /**
-     * 获取书籍详情信息。
-     * 该方法首先随机选择一个数据源尝试获取书籍详情，如果第一个数据源返回为空，则会尝试从另一个数据源获取。
-     * 如果两个数据源都未能提供有效信息，则记录错误日志并返回最后一个尝试的数据源结果（可能为null）。
-     *
-     * @param bookId 书籍的唯一标识符
-     * @return 返回包含书籍最新章节标题、ID、发布时间及总字数等信息的TomatoUpdateRecord对象；若所有数据源均未找到相关信息，则返回null。
-     */
-    public TomatoUpdateRecord getBookDetail(String bookId) {
-
-        boolean useFirst = ThreadLocalRandom.current().nextBoolean();
-
-        TomatoUpdateRecord first = useFirst ? getBookDetailFromSource1(bookId)
-                : getBookDetailFromSource2(bookId);
-
-        if (first != null) return first;
-
-        log.warn("随机选择的数据源 {} 返回 null，尝试另一数据源", useFirst ? "源1" : "源2");
-
-        TomatoUpdateRecord second = useFirst ? getBookDetailFromSource2(bookId)
-                : getBookDetailFromSource1(bookId);
-
-        if (second == null) {
-            log.error("两个数据源都返回 null，bookId={}", bookId);
-        }
-
-        return second;
-    }
-
-    /**
-     * 从数据源1获取书籍详情。
-     * @param bookId 书籍ID
-     * @return 返回一个包含书籍详细信息的TomatoUpdateRecord对象，如果获取失败则返回null
-     */
-    private TomatoUpdateRecord getBookDetailFromSource1(String bookId) {
-        String body = httpGet(DETAIL_API_1 + bookId);
-        if (body == null) return null;
-
-        try {
-            JSONObject root = new JSONObject(body);
-            JSONObject data = safe(root, "data");
-            if (data == null) return null;
-
-            return new TomatoUpdateRecord(
-                    data.optString("original_book_name"),
-                    data.optString("last_chapter_title"),
-                    data.optString("last_chapter_item_id"),
-                    formatEpoch(data.optLong("last_publish_time")),
-                    data.optLong("word_number")
-            );
-
-        } catch (Exception e) {
-            log.error("解析数据源 1 失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
+    
     /**
      * 从数据源2获取书籍详情。
      * @param bookId 书籍ID
      * @return 返回包含书籍名称、最新章节标题、最新章节ID、最后更新时间和总字数的TomatoUpdateRecord对象，如果获取失败则返回null。
      */
-    private TomatoUpdateRecord getBookDetailFromSource2(String bookId) {
+    public TomatoUpdateRecord getBookDetail(String bookId) {
         String body = httpGet(DETAIL_API_2 + bookId);
         if (body == null) return null;
 
@@ -196,7 +136,7 @@ public class TomatoApiClient {
                     data.optString("book_name"),
                     data.optString("last_chapter_title"),
                     data.optString("last_chapter_item_id"),
-                    formatEpoch(data.optLong("last_chapter_update_time")),
+                    formatEpoch(data.optLong("last_publish_time")),
                     data.optLong("word_number")
             );
 
@@ -245,7 +185,7 @@ public class TomatoApiClient {
     }
 
     /**
-     * 获取指定书籍的所有章节信息。
+     * 获取指定书籍的所有章节信息（目录）。
      * @param bookId 书籍的唯一标识符
      * @return 返回一个包含所有章节记录的列表，如果获取失败则返回空列表
      */

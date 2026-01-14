@@ -1,6 +1,6 @@
 package fun.luqing.dmws.repository.dmw;
 
-import fun.luqing.dmws.entity.dmw.UserStatus;
+import fun.luqing.dmws.entity.dmw.user.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

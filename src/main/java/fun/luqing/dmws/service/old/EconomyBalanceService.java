@@ -1,7 +1,7 @@
 package fun.luqing.dmws.service.old;
 
 import fun.luqing.dmws.entity.economy.EconomyBalanceRecord;
-import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository;
+import fun.luqing.dmws.repository.economy.EconomyBalanceRecordRepository1;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +12,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class EconomyBalanceService {
 
-    private final EconomyBalanceRecordRepository repository;
+    private final EconomyBalanceRecordRepository1 repository;
 
     /**
      * 查询余额

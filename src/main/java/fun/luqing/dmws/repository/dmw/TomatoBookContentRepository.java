@@ -1,6 +1,6 @@
 package fun.luqing.dmws.repository.dmw;
 
-import fun.luqing.dmws.entity.dmw.TomatoBookContent;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoBookContent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 

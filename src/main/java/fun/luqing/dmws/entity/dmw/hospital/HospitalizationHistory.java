@@ -1,4 +1,4 @@
-package fun.luqing.dmws.entity.dmw;
+package fun.luqing.dmws.entity.dmw.hospital;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 
 @Data
 @Entity
-@Table(name = "hospital")
-public class Hospital{
+@Table(name = "hospitalization_history")
+public class HospitalizationHistory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

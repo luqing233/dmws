@@ -1,4 +1,4 @@
-package fun.luqing.dmws.entity.dmw;
+package fun.luqing.dmws.entity.dmw.tomato;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(
         name = "tomato_book_content",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"bookId", "chapterId"})
+        uniqueConstraints = @UniqueConstraint(columnNames = {"book_id", "chapter_id"})
 )
 @Data
 @NoArgsConstructor

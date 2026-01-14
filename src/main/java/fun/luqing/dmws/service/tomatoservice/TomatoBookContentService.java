@@ -1,9 +1,9 @@
-package fun.luqing.dmws.service;
+package fun.luqing.dmws.service.tomatoservice;
 
 import fun.luqing.dmws.client.TomatoApiClient;
 import fun.luqing.dmws.client.TomatoChapterRecord;
 import fun.luqing.dmws.client.TomatoContentRecord;
-import fun.luqing.dmws.entity.dmw.TomatoBookContent;
+import fun.luqing.dmws.entity.dmw.tomato.TomatoBookContent;
 import fun.luqing.dmws.repository.dmw.TomatoBookContentRepository;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
