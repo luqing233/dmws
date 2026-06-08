@@ -53,4 +53,5 @@ public class ConfigManager {
         dmwConfig = MAPPER.readValue(file, DmwConfig.class);
         log.info("读取配置成功: {}", CONFIG_PATH);
     }
+
 }

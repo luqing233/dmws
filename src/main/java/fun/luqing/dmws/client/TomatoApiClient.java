@@ -21,11 +21,11 @@ public class TomatoApiClient {
 
 
 //https://qkfqapi.vv9v.cn/api/search
-    private static final String DETAIL_API_2 = "https://qkfqapi.vv9v.cn/api/detail?book_id=";
+    private static final String DETAIL_API_2 = "http://101.35.133.34:5000/api/detail?book_id=";
 
-    private static final String CHAPTER_CONTENT_API = "https://qkfqapi.vv9v.cn/api/raw_full?item_id=";
+    private static final String CHAPTER_CONTENT_API = "http://101.35.133.34:5000/api/raw_full?item_id=";
 
-    private static final String BOOK_CATALOG_API = "https://qkfqapi.vv9v.cn/api/book?book_id=";
+    private static final String BOOK_CATALOG_API = "http://101.35.133.34:5000/api/book?book_id=";
 
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
