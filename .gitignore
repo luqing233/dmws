@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### App ###
+temp/
+logs/
+config/*
+!config/config.example.json
+application.yaml

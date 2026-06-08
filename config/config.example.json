@@ -1,0 +1,15 @@
+{
+  "ws_url" : "ws://127.0.0.1:8080/ws",
+  "http_url" : "http://127.0.0.1:8080",
+  "max_messages" : 40,
+  "bot_id" : 0,
+  "bot_name" : "机器人名称",
+  "master" : [0],
+  "ai_character": "在此粘贴角色设定...",
+  "token_exchange_rate" : 0.0,
+  "default_model": "deepseek",
+  "deepseek_api_key" : "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "deepseek_model" : "deepseek-chat",
+  "doubao_api_key" : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "doubao_model" : "doubao-seed-1-6"
+}
