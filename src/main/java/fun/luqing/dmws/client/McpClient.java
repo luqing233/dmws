@@ -33,6 +33,30 @@ public class McpClient {
     private volatile boolean initialized;
     /** 最近一次调用是否因传输层问题失败（用于决定是否需要重建会话） */
     private volatile boolean sessionBroken;
+    /** 最近一次工具调用返回的结构化错误码，成功时为 null */
+    private volatile String lastToolErrorCode;
+
+    /**
+     * 返回最近一次工具调用的结构化错误码（如 CHAPTER_NOT_DOWNLOADED），
+     * 未出错时返回 null。
+     */
+    public String getLastToolErrorCode() {
+        return lastToolErrorCode;
+    }
+
+    /**
+     * 从工具错误内容中提取 code 字段，兼容 JSON 与纯文本两种情况。
+     */
+    private String extractErrorCode(String text) {
+        if (text == null || text.isBlank()) return null;
+        try {
+            JsonNode node = MAPPER.readTree(text.trim());
+            JsonNode code = node.path("code");
+            return code.isMissingNode() || code.isNull() ? null : code.asText();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
 
     public McpClient(String name, McpConfig.McpServer server) {
         this.name = name;
@@ -84,10 +108,14 @@ public class McpClient {
 
         JsonNode result = response.path("result");
         if (result.path("isError").asBoolean(false)) {
+            String raw = extractText(result);
             // 工具业务错误（如"章节未下载"）属于预期内的状态，降为 debug 避免刷屏
-            log.debug("[{}] 工具 {} 返回错误: {}", name, tool, abbreviate(extractText(result)));
+            log.debug("[{}] 工具 {} 返回错误: {}", name, tool, abbreviate(raw));
+            lastToolErrorCode = extractErrorCode(raw);
             return null;
         }
+
+        lastToolErrorCode = null;
 
         String text = extractText(result);
         if (text == null || text.isBlank()) {

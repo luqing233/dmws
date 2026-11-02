@@ -9,7 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 番茄小说客户端，通过 MCP 服务获取数据。
@@ -27,10 +29,17 @@ public class TomatoApiClient {
     private static final int DIRECTORY_PAGE_SIZE = 100;
     /** 目录最多翻页次数，避免异常情况下无限循环 */
     private static final int DIRECTORY_MAX_PAGES = 100;
+    /** 下载器批量读取单次上限 */
+    private static final int MAX_BATCH = 20;
+    /** 批量下载的轮询次数与间隔（每次 3 秒，最多约 3 分钟） */
+    private static final int BATCH_POLL_TIMES = 60;
+    private static final long BATCH_POLL_INTERVAL_MS = 3000L;
 
     private final ConfigManager configManager;
     private McpClient fanqie;
     private McpClient downloader;
+    /** 最近一次正文获取失败的结构化错误码 */
+    private volatile String lastContentErrorCode;
 
     public TomatoApiClient(ConfigManager configManager) {
         this.configManager = configManager;
@@ -95,6 +104,152 @@ public class TomatoApiClient {
     }
 
     /**
+     * 批量获取章节正文。
+     * 先用离散批量下载补齐目标章节，再按 item_ids 批量读取正文。
+     * 批量读取的 start_index/end_index 是下载器本地槽位，与书籍章节序号无关，
+     * 因此这里只用 item_ids 模式。
+     *
+     * @param bookId  所属书籍ID
+     * @param targets 待获取的章节
+     * @return 按章节ID索引的正文结果；未取到的章节不会出现在返回值中
+     */
+    public Map<String, TomatoContentRecord> getChapterContents(String bookId,
+                                                               List<ChapterTarget> targets) {
+        Map<String, TomatoContentRecord> result = new LinkedHashMap<>();
+        if (targets == null || targets.isEmpty()) return result;
+
+        List<ChapterTarget> batch = targets.size() > MAX_BATCH
+                ? targets.subList(0, MAX_BATCH) : targets;
+
+        // 先按 item_ids 离散下载，只下缺的那几章，不会把中间章节当成连续区间
+        downloadDiscrete(bookId, batch);
+        readBatch(bookId, batch, result);
+        return result;
+    }
+
+    /**
+     * 触发离散批量下载并等待完成。
+     * 下载失败不影响后续读取：已经在本地的章节照样能读到。
+     */
+    private void downloadDiscrete(String bookId, List<ChapterTarget> batch) {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("book_id", bookId);
+        var idsArray = MAPPER.createArrayNode();
+        for (ChapterTarget t : batch) idsArray.add(t.chapterId());
+        args.set("item_ids", idsArray);
+
+        JsonNode started = downloader().callTool("tnd_start_discrete_downloads", args);
+        if (started == null) return;
+
+        JsonNode batchId = started.path("batch_id");
+        if (batchId.isMissingNode() || batchId.isNull()) return;
+
+        // 批量任务在后台逐章执行，这里轮询到结束
+        for (int i = 0; i < BATCH_POLL_TIMES; i++) {
+            ObjectNode statusArgs = MAPPER.createObjectNode();
+            statusArgs.set("batch_id", batchId);
+            JsonNode status = downloader().callTool("tnd_get_batch_status", statusArgs);
+            if (status == null) return;
+
+            String state = status.path("status").asText("");
+            if ("done".equals(state) || "done_with_errors".equals(state) || "failed".equals(state)) {
+                if (!"done".equals(state)) {
+                    log.warn("批量下载未完全成功: batchId={} status={} errors={}",
+                            batchId.asText(""), state, abbreviateJson(status.path("errors")));
+                }
+                return;
+            }
+            if ("waiting_input".equals(state)) {
+                log.warn("批量下载需要人工选择书名或格式，已跳过: batchId={}", batchId.asText(""));
+                return;
+            }
+            try {
+                Thread.sleep(BATCH_POLL_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        log.warn("批量下载等待超时: batchId={}", batchId.asText(""));
+    }
+
+    private String abbreviateJson(JsonNode node) {
+        String s = node == null ? "" : node.toString();
+        return s.length() <= 200 ? s : s.substring(0, 200) + "...";
+    }
+
+    /**
+     * 按 item_ids 批量读取正文并填充结果。
+     * 响应中带有 chapter_order，可直接作为章节序号，无需再查目录。
+     */
+    private void readBatch(String bookId, List<ChapterTarget> batch,
+                           Map<String, TomatoContentRecord> result) {
+        ObjectNode args = MAPPER.createObjectNode();
+        args.put("book_id", bookId);
+        var idsArray = MAPPER.createArrayNode();
+        for (ChapterTarget t : batch) idsArray.add(t.chapterId());
+        args.set("item_ids", idsArray);
+
+        JsonNode root = downloader().callTool("tnd_read_downloaded_chapters", args);
+        if (root == null) return;
+
+        JsonNode chapters = root.path("chapters");
+        if (!chapters.isArray()) return;
+
+        Map<String, ChapterTarget> byId = new LinkedHashMap<>();
+        for (ChapterTarget t : batch) byId.put(t.chapterId(), t);
+
+        for (JsonNode ch : chapters) {
+            String itemId = ch.path("item_id").asText("");
+            ChapterTarget target = byId.get(itemId);
+            if (target == null) continue;
+
+            String text = ch.path("content").asText("");
+            if (text.isBlank()) continue;
+
+            // chapter_order 是番茄目录中的真实章节号，缺省时退回调用方传入的序号
+            int order = ch.path("chapter_order").asInt(target.order());
+
+            result.put(itemId, new TomatoContentRecord(
+                    bookId,
+                    root.path("book_name").asText(""),
+                    order,
+                    ch.path("title").asText(""),
+                    text,
+                    resolveChapterTime(bookId, itemId),
+                    countWords(text)
+            ));
+        }
+    }
+
+    /**
+     * 批量获取时的章节定位信息。
+     *
+     * @param chapterId 章节ID
+     * @param order     章节在书中的序号（1 起）
+     */
+    public record ChapterTarget(String chapterId, int order) {
+    }
+
+    /**
+     * 最近一次正文获取失败的结构化错误码。
+     * 取值见下载器工具：CHAPTER_NOT_DOWNLOADED / BOOK_NOT_FOUND /
+     * UPSTREAM_LIMITED / UPSTREAM_ERROR 等；无法识别的失败返回 null。
+     */
+    public String getLastContentErrorCode() {
+        return lastContentErrorCode;
+    }
+
+    /**
+     * 按错误码判断是否值得继续重试。
+     * 书不存在属于永久失败，重试再多次也不会有结果。
+     */
+    public static boolean isRetryable(String errorCode) {
+        if (errorCode == null || errorCode.isBlank()) return true;
+        return !"BOOK_NOT_FOUND".equals(errorCode) && !"INVALID_ARGUMENT".equals(errorCode);
+    }
+
+    /**
      * 获取章节正文。
      * <p>
      * 优先使用下载器：先读本地已下载内容，没有则触发单章下载并等待完成再读；
@@ -143,14 +298,19 @@ public class TomatoApiClient {
             return buildContentRecord(bookId, chapterId, order, root);
         }
 
-        if (!triggerChapterDownload(bookId, order)) return null;
+        if (!triggerChapterDownload(bookId, order)) {
+            lastContentErrorCode = downloader().getLastToolErrorCode();
+            return null;
+        }
 
         // 下载完成后按 item_id 校验，只接受真正命中目标章节的结果
         root = readDownloadedChapter(bookId, chapterId);
         if (root == null) {
+            lastContentErrorCode = downloader().getLastToolErrorCode();
             log.debug("章节 {} 下载后仍不可读（bookId={} order={}）", chapterId, bookId, order);
             return null;
         }
+        lastContentErrorCode = null;
         return buildContentRecord(bookId, chapterId, order, root);
     }
 
@@ -172,8 +332,17 @@ public class TomatoApiClient {
                 root.path("title").asText(""),
                 text,
                 resolveChapterTime(bookId, chapterId),
-                text.length()
+                countWords(text)
         );
+    }
+
+    /**
+     * 全项目统一的正文字数口径：正文字符数。
+     * 上游接口另有一个"官方字数"，它不含空白与标点，比字符数少约三分之一；
+     * 两种口径混用会让图表上的更新字数失真，因此统一以字符数为准。
+     */
+    private int countWords(String text) {
+        return text == null ? 0 : text.length();
     }
 
     /**
@@ -248,7 +417,7 @@ public class TomatoApiClient {
                 content.path("title").asText(""),
                 text,
                 resolveChapterTime(bookId, chapterId),
-                text.length()
+                countWords(text)
         );
     }
 

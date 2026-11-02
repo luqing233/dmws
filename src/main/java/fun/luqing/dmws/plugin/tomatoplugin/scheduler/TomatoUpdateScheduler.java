@@ -19,6 +19,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
 
@@ -79,12 +80,15 @@ public class TomatoUpdateScheduler {
     }
 
     /** 每轮每本书最多补全的章节数，避免单轮任务过长 */
-    private static final int BACKFILL_LIMIT = 10;
+    private static final int BACKFILL_LIMIT = 20;
+    /** 正文连续抓取失败多少次后放弃 */
+    private static final int MAX_FETCH_ATTEMPTS = 6;
 
     /**
      * 补全该书缺失的章节内容。
-     * 先同步目录（缺失的章节会以空正文入库），再逐章补抓正文，
-     * 每轮最多处理 {@value #BACKFILL_LIMIT} 章，避免拖垮定时任务。
+     * 先同步目录（缺失的章节会以空正文入库），再批量补抓正文：
+     * 一次性按区间下载、再按 item_ids 批量读取，每轮最多 {@value #BACKFILL_LIMIT} 章。
+     * 连续失败达到 {@value #MAX_FETCH_ATTEMPTS} 次的章节不再重试。
      *
      * @return 本轮成功补全的章节数
      */
@@ -99,27 +103,49 @@ public class TomatoUpdateScheduler {
                 .findAllByBookIdOrderByRealChapterOrderAsc(book.getBookId())
                 .stream()
                 .filter(c -> c.getContent() == null || c.getContent().isBlank())
+                .filter(c -> c.getFetchAttempts() == null || c.getFetchAttempts() < MAX_FETCH_ATTEMPTS)
                 .limit(BACKFILL_LIMIT)
                 .toList();
 
+        if (missing.isEmpty()) return 0;
+
+        List<TomatoApiClient.ChapterTarget> targets = missing.stream()
+                .map(c -> new TomatoApiClient.ChapterTarget(
+                        c.getChapterId(),
+                        c.getRealChapterOrder() == null ? 0 : c.getRealChapterOrder()))
+                .toList();
+
+        Map<String, TomatoContentRecord> fetched =
+                tomatoApiClient.getChapterContents(book.getBookId(), targets);
+
         int filled = 0;
         for (TomatoBookContent chapter : missing) {
-            try {
-                TomatoContentRecord record = tomatoApiClient.getChapterContent(
-                        chapter.getBookId(), chapter.getChapterId(), chapter.getRealChapterOrder());
-                if (record == null || record.content() == null || record.content().isBlank()) {
-                    continue;
-                }
+            TomatoContentRecord record = fetched.get(chapter.getChapterId());
+            if (record != null && record.content() != null && !record.content().isBlank()) {
                 chapter.setContent(record.content());
-                chapter.setWordCount(record.wordCount());
+                chapter.setWordCount(record.content().length());
                 if (record.updateTime() != null && !record.updateTime().isBlank()) {
                     chapter.setUpdateTime(record.updateTime());
                 }
+                chapter.setFetchAttempts(0);
                 contentService.saveOrUpdate(chapter);
                 filled++;
-            } catch (Exception e) {
-                log.warn("补全章节失败: bookId={} chapterId={} err={}",
-                        book.getBookId(), chapter.getChapterId(), e.getMessage());
+            } else {
+                // 书不存在之类的永久失败直接放弃，不必耗尽重试次数
+                String errorCode = tomatoApiClient.getLastContentErrorCode();
+                if (!TomatoApiClient.isRetryable(errorCode)) {
+                    log.warn("章节 {} 遇到不可重试的错误 {}，直接放弃: 《{}》{}",
+                            chapter.getChapterId(), errorCode, book.getBookName(), chapter.getTitle());
+                    contentService.markFetchGivenUp(chapter.getChapterId(), MAX_FETCH_ATTEMPTS);
+                    continue;
+                }
+
+                // 抓取失败时累加计数，达到上限后不再重试
+                int attempts = contentService.incrementFetchAttempts(chapter.getChapterId());
+                if (attempts >= MAX_FETCH_ATTEMPTS) {
+                    log.warn("章节 {} 已连续失败 {} 次，停止重试: 《{}》{}",
+                            chapter.getChapterId(), attempts, book.getBookName(), chapter.getTitle());
+                }
             }
         }
         return filled;

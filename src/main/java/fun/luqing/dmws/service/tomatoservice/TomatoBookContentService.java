@@ -137,16 +137,14 @@ public class TomatoBookContentService {
         for (TomatoChapterRecord rec : remoteChapters) {
             if (!existingChapterIds.contains(rec.itemId())) {
                 try {
-                    TomatoBookContent chapter = new TomatoBookContent(
-                            null,
-                            bookId,
-                            rec.itemId(),
-                            rec.realChapterOrder(),
-                            rec.title(),
-                            null,
-                            rec.firstPassTime(),
-                            0
-                    );
+                    TomatoBookContent chapter = new TomatoBookContent();
+                    chapter.setBookId(bookId);
+                    chapter.setChapterId(rec.itemId());
+                    chapter.setRealChapterOrder(rec.realChapterOrder());
+                    chapter.setTitle(rec.title());
+                    chapter.setContent(null);
+                    chapter.setUpdateTime(rec.firstPassTime());
+                    chapter.setWordCount(0);
                     repository.save(chapter);
                     localChapters.add(chapter);
                     addedCount++;
@@ -246,11 +244,17 @@ public class TomatoBookContentService {
 
             TomatoBookContent exist = optional.get();
 
-            exist.setContent(chapter.getContent());
+            // 目录同步会以空正文调用本方法，不能让它覆盖已抓取的正文
+            if (chapter.getContent() != null && !chapter.getContent().isBlank()) {
+                exist.setContent(chapter.getContent());
+                // 字数口径统一为正文长度，与 Excel 导入和历史重算保持一致
+                exist.setWordCount(chapter.getContent().length());
+                // 正文抓取成功，失败计数归零
+                exist.setFetchAttempts(0);
+            }
             exist.setRealChapterOrder(chapter.getRealChapterOrder());
             exist.setTitle(chapter.getTitle());
             exist.setUpdateTime(chapter.getUpdateTime());
-            exist.setWordCount(chapter.getWordCount());
 
             return repository.save(exist);
         }
@@ -258,6 +262,40 @@ public class TomatoBookContentService {
         return repository.save(chapter);
     }
 
+
+    /**
+     * 记录章节正文抓取失败一次。
+     * 只更新失败计数，不触碰正文与字数，避免与目录同步、正文回写互相干扰。
+     *
+     * @param chapterId 章节ID
+     * @return 累加后的失败次数；章节不存在时返回 -1
+     */
+    public int incrementFetchAttempts(String chapterId) {
+        Optional<TomatoBookContent> optional = repository.findByChapterId(chapterId);
+        if (optional.isEmpty()) return -1;
+
+        TomatoBookContent exist = optional.get();
+        int attempts = exist.getFetchAttempts() == null ? 0 : exist.getFetchAttempts();
+        exist.setFetchAttempts(attempts + 1);
+        repository.save(exist);
+        return attempts + 1;
+    }
+
+    /**
+     * 标记章节不再尝试抓取正文。
+     * 用于书不存在等永久失败，直接把失败计数拉到上限。
+     *
+     * @param chapterId 章节ID
+     * @param maxAttempts 上限值
+     */
+    public void markFetchGivenUp(String chapterId, int maxAttempts) {
+        Optional<TomatoBookContent> optional = repository.findByChapterId(chapterId);
+        if (optional.isEmpty()) return;
+
+        TomatoBookContent exist = optional.get();
+        exist.setFetchAttempts(maxAttempts);
+        repository.save(exist);
+    }
 
     public record UpdateResult(int total, int success, int fail, int exist) {}
 

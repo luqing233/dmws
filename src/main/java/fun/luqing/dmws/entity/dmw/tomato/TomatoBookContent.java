@@ -1,7 +1,6 @@
 package fun.luqing.dmws.entity.dmw.tomato;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -12,7 +11,6 @@ import lombok.NoArgsConstructor;
 )
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class TomatoBookContent {
 
     @Id
@@ -36,5 +34,12 @@ public class TomatoBookContent {
     private String updateTime; // 更新时间
 
     private Integer wordCount; //章节字数
+
+    /**
+     * 正文抓取连续失败次数。
+     * 达到上限后不再重试，避免永远抓不到的章节每轮都消耗一次下载等待。
+     */
+    @Column(nullable = false)
+    private Integer fetchAttempts = 0;
 
 }
