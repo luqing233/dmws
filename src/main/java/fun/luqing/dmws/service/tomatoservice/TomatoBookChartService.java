@@ -31,7 +31,9 @@ public class TomatoBookChartService {
             wordCounts.add(((Number) r[2]).intValue());
         }
 
-        String chartTitle ="《"+ bookName + "》 最近三十天更新情况";
+        // 统计窗口以该书最后更新日为终点，标题中标注截止日期以免被误读为"最近三十天"
+        String endDate = dates.isEmpty() ? "无数据" : dates.get(dates.size() - 1);
+        String chartTitle = "《" + bookName + "》最近三十天更新情况（截至 " + endDate + "）";
         String wordCountLabel = "更新字数";
         String chapterCountLabel = "更新章节数";
 

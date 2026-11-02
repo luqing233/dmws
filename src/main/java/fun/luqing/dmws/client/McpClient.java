@@ -84,13 +84,14 @@ public class McpClient {
 
         JsonNode result = response.path("result");
         if (result.path("isError").asBoolean(false)) {
-            log.warn("[{}] 工具 {} 返回错误: {}", name, tool, abbreviate(extractText(result)));
+            // 工具业务错误（如"章节未下载"）属于预期内的状态，降为 debug 避免刷屏
+            log.debug("[{}] 工具 {} 返回错误: {}", name, tool, abbreviate(extractText(result)));
             return null;
         }
 
         String text = extractText(result);
         if (text == null || text.isBlank()) {
-            log.warn("[{}] 工具 {} 返回空内容", name, tool);
+            log.debug("[{}] 工具 {} 返回空内容", name, tool);
             return null;
         }
         try {

@@ -53,36 +53,76 @@ public class TomatoUpdateScheduler {
                 TomatoUpdateRecord info = tomatoApiClient.getBookDetail(book.getBookId());
                 if (info == null) continue;
 
-                if (!Objects.equals(book.getLastChapterId(), info.lastChapterId())
-                        && DateUtil.earlierOrEqual(book.getLastTime(), info.lastPublishTime())) {
+                boolean changed = !Objects.equals(book.getLastChapterId(), info.lastChapterId())
+                        && DateUtil.earlierOrEqual(book.getLastTime(), info.lastPublishTime());
 
+                if (changed) {
                     book.setLastChapterId(info.lastChapterId());
                     book.setLastTitle(info.lastChapterTitle());
                     book.setLastTime(info.lastPublishTime());
                     book.setTotalWords(info.totalWords());
                     bookListService.saveOrUpdate(book);
+                }
 
-                    TomatoContentRecord recode = tomatoApiClient.getChapterContent(info.lastChapterId());
-                    if (recode != null) {
-                        TomatoBookContent chapter = new TomatoBookContent(
-                                null,
-                                recode.bookId(),
-                                info.lastChapterId(),
-                                recode.realChapterOrder(),
-                                recode.title(),
-                                recode.content(),
-                                recode.updateTime(),
-                                recode.wordCount()
-                        );
-                        contentService.saveOrUpdate(chapter);
-                    }
+                // 每轮都补全缺失章节，而不只是在检测到更新时
+                int filled = backfillMissingChapters(book);
 
+                if (changed) {
                     notifyGroups(book, bot);
+                } else if (filled > 0) {
+                    log.info("《{}》补全了 {} 章历史内容", book.getBookName(), filled);
                 }
             }
         } catch (Exception e) {
             log.error("更新任务异常: {}", e.getMessage(), e);
         }
+    }
+
+    /** 每轮每本书最多补全的章节数，避免单轮任务过长 */
+    private static final int BACKFILL_LIMIT = 10;
+
+    /**
+     * 补全该书缺失的章节内容。
+     * 先同步目录（缺失的章节会以空正文入库），再逐章补抓正文，
+     * 每轮最多处理 {@value #BACKFILL_LIMIT} 章，避免拖垮定时任务。
+     *
+     * @return 本轮成功补全的章节数
+     */
+    private int backfillMissingChapters(TomatoBookList book) {
+        try {
+            contentService.updateChapterList(book.getBookId());
+        } catch (Exception e) {
+            log.warn("同步目录失败: bookId={} err={}", book.getBookId(), e.getMessage());
+        }
+
+        List<TomatoBookContent> missing = contentService
+                .findAllByBookIdOrderByRealChapterOrderAsc(book.getBookId())
+                .stream()
+                .filter(c -> c.getContent() == null || c.getContent().isBlank())
+                .limit(BACKFILL_LIMIT)
+                .toList();
+
+        int filled = 0;
+        for (TomatoBookContent chapter : missing) {
+            try {
+                TomatoContentRecord record = tomatoApiClient.getChapterContent(
+                        chapter.getBookId(), chapter.getChapterId(), chapter.getRealChapterOrder());
+                if (record == null || record.content() == null || record.content().isBlank()) {
+                    continue;
+                }
+                chapter.setContent(record.content());
+                chapter.setWordCount(record.wordCount());
+                if (record.updateTime() != null && !record.updateTime().isBlank()) {
+                    chapter.setUpdateTime(record.updateTime());
+                }
+                contentService.saveOrUpdate(chapter);
+                filled++;
+            } catch (Exception e) {
+                log.warn("补全章节失败: bookId={} chapterId={} err={}",
+                        book.getBookId(), chapter.getChapterId(), e.getMessage());
+            }
+        }
+        return filled;
     }
 
     private void notifyGroups(TomatoBookList book, Bot bot) {

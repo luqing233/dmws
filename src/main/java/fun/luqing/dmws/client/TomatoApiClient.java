@@ -137,20 +137,37 @@ public class TomatoApiClient {
     }
 
     private TomatoContentRecord fetchFromDownloader(String bookId, String chapterId, int order) {
-        JsonNode root = readDownloadedChapter(bookId, chapterId, order);
-        if (root == null) {
-            if (!triggerChapterDownload(bookId, order)) return null;
-            root = readDownloadedChapter(bookId, chapterId, order);
-            if (root == null) return null;
+        // 先看本地是否已下载，已下载就不再触发下载
+        JsonNode root = readDownloadedChapter(bookId, chapterId);
+        if (root != null) {
+            return buildContentRecord(bookId, chapterId, order, root);
         }
 
+        if (!triggerChapterDownload(bookId, order)) return null;
+
+        // 下载完成后按 item_id 校验，只接受真正命中目标章节的结果
+        root = readDownloadedChapter(bookId, chapterId);
+        if (root == null) {
+            log.debug("章节 {} 下载后仍不可读（bookId={} order={}）", chapterId, bookId, order);
+            return null;
+        }
+        return buildContentRecord(bookId, chapterId, order, root);
+    }
+
+    private TomatoContentRecord buildContentRecord(String bookId, String chapterId, int order, JsonNode root) {
         String text = root.path("content").asText("");
         if (text.isBlank()) return null;
+
+        // 校验返回的确实是目标章节，避免下载器的本地槽位错位导致张冠李戴
+        String gotItemId = root.path("item_id").asText("");
+        if (!gotItemId.isEmpty() && !gotItemId.equals(chapterId)) {
+            log.warn("下载器返回的章节与请求不符: 期望={} 实际={}", chapterId, gotItemId);
+            return null;
+        }
 
         return new TomatoContentRecord(
                 bookId,
                 root.path("book_name").asText(""),
-                // 响应中的 index 是下载器本地槽位，章节序号以传入的 order 为准
                 order,
                 root.path("title").asText(""),
                 text,
@@ -161,9 +178,10 @@ public class TomatoApiClient {
 
     /**
      * 按 item_id 读取已下载章节。
-     * item_id 是唯一可靠的定位方式；index 是下载器的本地槽位，会随下载顺序变化。
+     * item_id 是唯一可靠的定位方式；响应中的 index 是下载器本地槽位，
+     * 会随下载顺序变化，不能作为章节序号的依据。
      */
-    private JsonNode readDownloadedChapter(String bookId, String chapterId, int order) {
+    private JsonNode readDownloadedChapter(String bookId, String chapterId) {
         ObjectNode args = MAPPER.createObjectNode();
         args.put("book_id", bookId);
         args.put("item_id", chapterId);
