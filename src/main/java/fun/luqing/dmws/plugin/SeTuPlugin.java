@@ -326,7 +326,12 @@ public class SeTuPlugin {
             } else {
                 url = "[无可用链接]";
             }
-            linkMessages.add("「" + result.title + "」 / " + result.author + "\n" + url);
+            // 图片链接节点单独发送，客户端可直接预览；纯文本节点保留链接便于复制
+            linkMessages.add(url);
+            if (result.path != null) {
+                linkMessages.add(MsgUtils.builder().img(url).build());
+            }
+            linkMessages.add("「" + result.title + "」 / " + result.author);
         }
 
         var linkForwardMsg = ShiroUtils.generateForwardMsg(

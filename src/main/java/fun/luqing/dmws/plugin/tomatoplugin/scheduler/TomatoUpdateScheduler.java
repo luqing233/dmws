@@ -33,7 +33,7 @@ public class TomatoUpdateScheduler {
     private final TomatoApiClient tomatoApiClient;
     private final ConfigManager configManager;
 
-    @Scheduled(fixedDelay = 1000 * 60 * 4)
+    @Scheduled(fixedDelay = 1000 * 60 * 4, initialDelay = 1000 * 30)
     public void updateSubscribedBooks() {
         try {
             List<TomatoBookList> books = bookListService.findAll();
@@ -41,7 +41,7 @@ public class TomatoUpdateScheduler {
 
             Bot bot = configManager.getBotContainer().robots.get(configManager.getDmwConfig().getBot_id());
             if (bot == null) {
-                log.warn("未找到 bot_id={} 的已连接实例，跳过本次更新（请检查 config.json 的 bot_id 是否与登录账号一致）",
+                log.warn("bot_id={} 尚未连接，跳过本次更新",
                         configManager.getDmwConfig().getBot_id());
                 return;
             }
