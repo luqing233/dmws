@@ -89,7 +89,8 @@ public class ChapterContentCommand {
         TomatoBookContent chapter = chapters.get(chapterIndex - 1);
 
         if (chapter.getContent() == null) {
-            TomatoContentRecord record = tomatoApiClient.getChapterContent(chapter.getChapterId());
+            TomatoContentRecord record = tomatoApiClient.getChapterContent(
+                    chapter.getBookId(), chapter.getChapterId(), chapter.getRealChapterOrder());
             if (record != null) {
                 chapter.setContent(record.content());
                 chapter.setWordCount(record.wordCount());

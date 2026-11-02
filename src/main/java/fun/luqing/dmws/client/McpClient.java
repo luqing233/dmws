@@ -31,6 +31,8 @@ public class McpClient {
 
     private volatile String sessionId;
     private volatile boolean initialized;
+    /** 最近一次调用是否因传输层问题失败（用于决定是否需要重建会话） */
+    private volatile boolean sessionBroken;
 
     public McpClient(String name, McpConfig.McpServer server) {
         this.name = name;
@@ -49,8 +51,9 @@ public class McpClient {
      */
     public JsonNode callTool(String tool, ObjectNode args) {
         JsonNode result = callToolInternal(tool, args);
-        if (result == null) {
-            // 会话可能已失效，重建一次后重试
+        // 只有真正的传输层失败（非工具业务错误）才重建会话重试
+        if (result == null && sessionBroken) {
+            sessionBroken = false;
             resetSession();
             result = callToolInternal(tool, args);
         }
@@ -58,14 +61,21 @@ public class McpClient {
     }
 
     private JsonNode callToolInternal(String tool, ObjectNode args) {
-        if (!ensureSession()) return null;
+        if (!ensureSession()) {
+            sessionBroken = true;
+            return null;
+        }
 
         ObjectNode params = MAPPER.createObjectNode();
         params.put("name", tool);
         params.set("arguments", args == null ? MAPPER.createObjectNode() : args);
 
         JsonNode response = rpc("tools/call", params, server.getReadTimeout());
-        if (response == null) return null;
+        if (response == null) {
+            // rpc 返回 null 代表传输失败或 HTTP 非 2xx，视为会话可能失效
+            sessionBroken = true;
+            return null;
+        }
 
         if (response.has("error")) {
             log.warn("[{}] 调用 {} 失败: {}", name, tool, abbreviate(response.get("error").toString()));

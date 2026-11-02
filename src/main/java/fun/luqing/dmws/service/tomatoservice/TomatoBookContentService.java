@@ -198,7 +198,8 @@ public class TomatoBookContentService {
                 return OperationStatus.EXIST;
             }
 
-            TomatoContentRecord record = tomatoApiClient.getChapterContent(chapter.getChapterId());
+            TomatoContentRecord record = tomatoApiClient.getChapterContent(
+                    chapter.getBookId(), chapter.getChapterId(), chapter.getRealChapterOrder());
             if (record != null && record.content() != null) {
                 chapter.setContent(record.content());
                 chapter.setWordCount(record.wordCount());
