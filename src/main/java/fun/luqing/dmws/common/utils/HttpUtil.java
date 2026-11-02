@@ -1,5 +1,6 @@
 package fun.luqing.dmws.common.utils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
  * HttpUtil 类提供了执行 HTTP 请求的方法，支持 GET 和 POST 方法，并且可以配置代理。
  * 该类的所有方法都会返回一个 JSONObject 对象，即使在请求过程中发生异常也会返回包含错误信息的 JSON 对象。
  */
+@Slf4j
 public class HttpUtil {
 
 
@@ -56,7 +58,7 @@ public class HttpUtil {
                 response.append(line);
             }
 
-            System.out.println(response.toString());
+            log.debug("HTTP {} {} -> {}", method.toUpperCase(), urlStr, response);
 
             // 直接解析为 JSONObject
             return new JSONObject(response.toString());

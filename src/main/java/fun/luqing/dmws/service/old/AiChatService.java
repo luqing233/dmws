@@ -53,24 +53,24 @@ public class AiChatService {
             return response;
         }
 
-        // 检查并扣除余额
-        Optional<EconomyBalanceRecord> recordOpt = checkAndDeductBalance(userId, tokenRate, formattedMessage);
-        if (recordOpt.isEmpty()) {
+        // 检查并扣除余额（扣费逻辑内部已完成 AI 调用）
+        Optional<AiResponse> deducted = checkAndDeductBalance(userId, tokenRate, formattedMessage);
+        if (deducted.isEmpty()) {
             return AiResponse.error("账户不存在或余额不足，无法使用AI服务。");
         }
 
-        return aiUtil.chat(userId, formattedMessage);
+        return deducted.get();
     }
 
     /**
-     * 检查用户余额是否足够使用AI，并在成功时扣除费用
+     * 检查用户余额是否足够使用AI，调用一次 AI 后在成功时扣除费用
      *
      * @param userId           用户ID
      * @param tokenRate        令牌兑换率
      * @param formattedMessage 格式化的消息
-     * @return 用户余额记录（如果存在且余额足够）
+     * @return AI 回复；账户不存在或余额不足时返回空
      */
-    private Optional<EconomyBalanceRecord> checkAndDeductBalance(long userId, double tokenRate, String formattedMessage) {
+    private Optional<AiResponse> checkAndDeductBalance(long userId, double tokenRate, String formattedMessage) {
         String uuid = "u" + userId;
         Optional<EconomyBalanceRecord> recordOpt = economyRepo.findByContextAndCurrencyAndUuid(CONTEXT, CURRENCY, uuid);
 
@@ -85,7 +85,7 @@ public class AiChatService {
             return Optional.empty();
         }
 
-        // 调用 AI
+        // 调用 AI（调用链中只能有一次）
         AiResponse response = aiUtil.chat(userId, formattedMessage);
         if (response.status() == AiStatus.SUCCESS) {
             double cost = response.total_tokens() * tokenRate;
@@ -96,7 +96,7 @@ public class AiChatService {
             log.info("[AI对话] 用户 {} 扣费 {}，新余额 {}", userId, cost, newBalance);
         }
 
-        return Optional.of(record);
+        return Optional.of(response);
     }
 
     /**

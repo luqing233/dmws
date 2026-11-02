@@ -8,7 +8,6 @@ import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
 import fun.luqing.dmws.service.tomatoservice.TomatoBookChartService;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookContentService;
 import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
 import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ChartCommand {
 
-    private final TomatoBookContentService contentService;
     private final TomatoBookListService bookListService;
     private final TomatoBookChartService chartService;
     private final TomatoSubscriptionGroupService subscriptionService;
@@ -48,20 +46,23 @@ public class ChartCommand {
             return;
         }
 
-        subscriptionService.findById(subId).ifPresent(sub -> {
+        subscriptionService.findById(subId).ifPresentOrElse(sub -> {
+            if (sub.getGroupId() != groupId) {
+                TomatoMessageUtil.sendGroupMessage(bot, groupId, "未找到对应订阅。");
+                return;
+            }
             TomatoBookList book = bookListService.findByBookId(sub.getBookId()).orElse(null);
             if (book == null) {
                 TomatoMessageUtil.sendGroupMessage(bot, groupId, "书籍不存在。");
                 return;
             }
             try {
-                contentService.updateAllChapters(book.getBookId(), false);
                 String chartUrl = chartService.generateBook30DaysChart(book.getBookId(), book.getBookName());
                 bot.sendGroupMsg(groupId, com.mikuac.shiro.common.utils.MsgUtils.builder()
                         .text("《" + book.getBookName() + "》最近30天更新情况为\n").img(chartUrl).build(), false);
             } catch (Exception e) {
                 TomatoMessageUtil.sendGroupMessage(bot, groupId, "生成图表失败：" + e.getMessage());
             }
-        });
+        }, () -> TomatoMessageUtil.sendGroupMessage(bot, groupId, "未找到对应订阅。"));
     }
 }

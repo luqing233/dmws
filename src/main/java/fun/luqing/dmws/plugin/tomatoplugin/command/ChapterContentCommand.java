@@ -14,6 +14,7 @@ import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
 import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
 import fun.luqing.dmws.client.TomatoApiClient;
 import fun.luqing.dmws.common.annotation.CommandInfo;
+import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ import static com.mikuac.shiro.common.utils.ShiroUtils.generateForwardMsg;
 public class ChapterContentCommand {
 
     private final TomatoBookContentService contentService;
+    private final ConfigManager configManager;
     private final TomatoBookListService bookListService;
     private final TomatoSubscriptionGroupService subscriptionService;
     private final TomatoApiClient tomatoApiClient;
@@ -115,8 +117,8 @@ public class ChapterContentCommand {
         }
 
         List<Map<String, Object>> forwardMsg = generateForwardMsg(
-                1945927750L,
-                "猫猫02号机",
+                configManager.getDmwConfig().getBot_id(),
+                configManager.getDmwConfig().getBot_name(),
                 messageList
         );
         bot.sendGroupForwardMsg(groupId, forwardMsg);

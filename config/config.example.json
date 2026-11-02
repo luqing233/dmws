@@ -11,5 +11,7 @@
   "deepseek_api_key" : "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "deepseek_model" : "deepseek-chat",
   "doubao_api_key" : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-  "doubao_model" : "doubao-seed-1-6"
+  "doubao_model" : "doubao-seed-1-6",
+  "file_server_port" : 8765,
+  "file_server_host" : "127.0.0.1"
 }

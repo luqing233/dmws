@@ -1,12 +1,14 @@
 package fun.luqing.dmws.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mikuac.shiro.core.BotContainer;
+import fun.luqing.dmws.common.server.ImageFileServer;
 import jakarta.annotation.PostConstruct;
-import jakarta.annotation.Resource;
+import jakarta.annotation.PreDestroy;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,16 +16,16 @@ import java.io.IOException;
 @Component
 @Slf4j
 @Getter
+@RequiredArgsConstructor
 public class ConfigManager {
 
     private static final String CONFIG_PATH = "config/config.json";
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-
-    @Resource
-    private final BotContainer botContainer = new BotContainer();
+    private final BotContainer botContainer;
 
     private DmwConfig dmwConfig;
+    private ImageFileServer imageFileServer;
 
     @PostConstruct
     public void initConfig() {
@@ -35,10 +37,28 @@ public class ConfigManager {
             } else {
                 loadConfig(file);
             }
+            startFileServer();
         } catch (IOException e) {
             log.error("初始化配置失败", e);
-            // 初始化一个默认配置以防止空指针
             dmwConfig = new DmwConfig();
+        }
+    }
+
+    private void startFileServer() {
+        try {
+            int port = dmwConfig.getFile_server_port();
+            String host = dmwConfig.getFile_server_host();
+            imageFileServer = new ImageFileServer(host, port);
+            imageFileServer.start();
+        } catch (IOException e) {
+            log.error("图片文件服务器启动失败: {}", e.getMessage());
+        }
+    }
+
+    @PreDestroy
+    public void destroy() {
+        if (imageFileServer != null) {
+            imageFileServer.stop();
         }
     }
 

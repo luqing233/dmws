@@ -40,7 +40,11 @@ public class TomatoUpdateScheduler {
             if (books.isEmpty()) return;
 
             Bot bot = configManager.getBotContainer().robots.get(configManager.getDmwConfig().getBot_id());
-            if (bot == null) return;
+            if (bot == null) {
+                log.warn("未找到 bot_id={} 的已连接实例，跳过本次更新（请检查 config.json 的 bot_id 是否与登录账号一致）",
+                        configManager.getDmwConfig().getBot_id());
+                return;
+            }
 
             for (TomatoBookList book : books) {
                 int delay = 5 + new Random().nextInt(11);

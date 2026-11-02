@@ -19,6 +19,8 @@ public class DmwConfig {
     private String deepseek_model;
     private String doubao_api_key;
     private String doubao_model;
+    private int file_server_port = 8765;
+    private String file_server_host = "127.0.0.1";
 
     /**
      * 判断指定ID是否为主人

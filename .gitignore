@@ -38,3 +38,7 @@ logs/
 config/*
 !config/config.example.json
 application.yaml
+
+### GitHub Copilot ###
+.github/copilot-instructions.md
+.github/git-commit-instructions.md
