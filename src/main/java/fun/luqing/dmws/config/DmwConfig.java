@@ -23,6 +23,11 @@ public class DmwConfig {
     private String file_server_host = "127.0.0.1";
 
     /**
+     * 番茄小说 MCP 服务配置（在线小说接口与本地下载器）。
+     */
+    private McpConfig mcp = new McpConfig();
+
+    /**
      * 判断指定ID是否为主人
      * @param id 要检查的ID
      * @return 如果是主人返回true，否则返回false

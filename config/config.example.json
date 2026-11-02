@@ -13,5 +13,19 @@
   "doubao_api_key" : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
   "doubao_model" : "doubao-seed-1-6",
   "file_server_port" : 8765,
-  "file_server_host" : "127.0.0.1"
+  "file_server_host" : "127.0.0.1",
+  "mcp" : {
+    "fanqie" : {
+      "url" : "http://127.0.0.1:18000/mcp",
+      "token" : "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "timeout" : 30,
+      "readTimeout" : 300
+    },
+    "downloader" : {
+      "url" : "http://127.0.0.1:18001/mcp",
+      "token" : "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "timeout" : 30,
+      "readTimeout" : 300
+    }
+  }
 }
