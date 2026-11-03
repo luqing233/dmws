@@ -35,8 +35,6 @@ build/
 ### App ###
 temp/
 logs/
-config/*
-!config/config.example.json
 application.yaml
 
 ### GitHub Copilot ###

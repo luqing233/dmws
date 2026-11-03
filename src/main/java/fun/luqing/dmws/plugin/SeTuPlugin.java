@@ -148,8 +148,8 @@ public class SeTuPlugin {
             }
 
             // 构建合并转发消息
-            String baseUrl = "http://" + configManager.getDmwConfig().getFile_server_host()
-                    + ":" + configManager.getDmwConfig().getFile_server_port() + "/";
+            String baseUrl = "http://" + configManager.getDmwConfig().getFileServerHost()
+                    + ":" + configManager.getDmwConfig().getFileServerPort() + "/";
 
 
             List<String> messageList = new ArrayList<>();
@@ -187,8 +187,8 @@ public class SeTuPlugin {
             }
 
             var forwardMsg = ShiroUtils.generateForwardMsg(
-                    configManager.getDmwConfig().getBot_id(),
-                    configManager.getDmwConfig().getBot_name(),
+                    configManager.getDmwConfig().getBotId(),
+                    configManager.getDmwConfig().getBotName(),
                     messageList
             );
 
@@ -335,8 +335,8 @@ public class SeTuPlugin {
         }
 
         var linkForwardMsg = ShiroUtils.generateForwardMsg(
-                configManager.getDmwConfig().getBot_id(),
-                configManager.getDmwConfig().getBot_name(),
+                configManager.getDmwConfig().getBotId(),
+                configManager.getDmwConfig().getBotName(),
                 linkMessages
         );
         bot.sendForwardMsg(event, linkForwardMsg);

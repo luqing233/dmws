@@ -2,25 +2,22 @@ package fun.luqing.dmws.config;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
 @Getter
 @Setter
+@Component
+@ConfigurationProperties(prefix = "dmws")
 public class DmwConfig {
-    private String ws_url;
-    private String http_url;
-    private int max_messages=40;
-    private long bot_id;
-    private String bot_name;
+    private String wsUrl;
+    private String httpUrl;
+    private int maxMessages = 40;
+    private long botId;
+    private String botName;
     private long[] master;
-    private String ai_character;
-    private double token_exchange_rate = 0;
-    private String default_model;
-    private String deepseek_api_key;
-    private String deepseek_model;
-    private String doubao_api_key;
-    private String doubao_model;
-    private int file_server_port = 8765;
-    private String file_server_host = "127.0.0.1";
+    private int fileServerPort = 8765;
+    private String fileServerHost = "127.0.0.1";
 
     /**
      * 番茄小说 MCP 服务配置（在线小说接口与本地下载器）。

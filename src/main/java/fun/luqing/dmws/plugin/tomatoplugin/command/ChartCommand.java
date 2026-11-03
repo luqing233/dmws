@@ -1,5 +1,6 @@
 package fun.luqing.dmws.plugin.tomatoplugin.command;
 
+import com.mikuac.shiro.common.utils.MsgUtils;
 import com.mikuac.shiro.annotation.GroupMessageHandler;
 import com.mikuac.shiro.annotation.MessageHandlerFilter;
 import com.mikuac.shiro.annotation.common.Shiro;
@@ -57,9 +58,11 @@ public class ChartCommand {
                 return;
             }
             try {
-                String chartUrl = chartService.generateBook30DaysChart(book.getBookId(), book.getBookName());
-                bot.sendGroupMsg(groupId, com.mikuac.shiro.common.utils.MsgUtils.builder()
-                        .text("《" + book.getBookName() + "》最近30天更新情况为\n").img(chartUrl).build(), false);
+                byte[] chartBytes = chartService.generateBookUpdateHeatmap(book.getBookId(), book.getBookName());
+                bot.sendGroupMsg(groupId, MsgUtils.builder()
+                        .text("《" + book.getBookName() + "》近一年更新热力图\n")
+                        .img(chartBytes)
+                        .build(), false);
             } catch (Exception e) {
                 TomatoMessageUtil.sendGroupMessage(bot, groupId, "生成图表失败：" + e.getMessage());
             }

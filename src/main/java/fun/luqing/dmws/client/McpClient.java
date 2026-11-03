@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import fun.luqing.dmws.config.McpConfig;
+import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.URI;
@@ -189,7 +190,7 @@ public class McpClient {
             sessionId = sid;
             sendInitializedNotification();
             initialized = true;
-            log.info("[{}] MCP 会话已建立: {}", name, abbreviate(sid));
+            TomatoLogContext.info(log, "[{}] MCP 会话已建立: {}", name, abbreviate(sid));
             return true;
         } catch (Exception e) {
             log.error("[{}] MCP 初始化异常: {}", name, e.getMessage());

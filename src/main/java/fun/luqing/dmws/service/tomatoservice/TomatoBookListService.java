@@ -1,6 +1,7 @@
 package fun.luqing.dmws.service.tomatoservice;
 
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
+import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
 import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +47,7 @@ public class TomatoBookListService {
      * @return 返回一个Optional对象，如果找到对应的书籍则包含TomatoBookList实例，否则为空
      */
     public Optional<TomatoBookList> findByBookId(String bookId) {
-        log.info("查询书籍, bookId={}", bookId);
+        TomatoLogContext.info(log, "查询书籍, bookId={}", bookId);
         return repository.findByBookId(bookId);
     }
 

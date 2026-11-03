@@ -11,22 +11,46 @@ public interface TomatoBookContentRepository extends JpaRepository<TomatoBookCon
 
     /**
      * 统计该书最近 30 天的更新情况。
-     * 时间窗口以该书最新章节的更新日为终点，而非今天：
-     * 断更的书若按今天计算会得到一片空白，图中看不出任何信息。
-     * 该书没有任何章节时退回以今天为终点。
+     * 时间窗口固定结束到今天。
      */
     @Query(value = """
     WITH RECURSIVE date_series AS (
-        SELECT COALESCE(
-            (SELECT DATE(MAX(update_time)) FROM tomato_book_content WHERE book_id = ?1),
-            CURDATE()
-        ) - INTERVAL 29 DAY AS dt
+        SELECT CURDATE() - INTERVAL 29 DAY AS dt
         UNION ALL
         SELECT dt + INTERVAL 1 DAY FROM date_series
-        WHERE dt + INTERVAL 1 DAY <= COALESCE(
-            (SELECT DATE(MAX(update_time)) FROM tomato_book_content WHERE book_id = ?1),
-            CURDATE()
-        )
+        WHERE dt + INTERVAL 1 DAY <= CURDATE()
+    )
+    SELECT
+        ds.dt AS update_date,
+        COALESCE(SUM(CASE
+            WHEN tbc.content IS NOT NULL
+             AND tbc.content <> ''
+             AND tbc.word_count > 0
+            THEN 1 ELSE 0 END), 0) AS chapter_count,
+        COALESCE(SUM(CASE
+            WHEN tbc.content IS NOT NULL
+             AND tbc.content <> ''
+             AND tbc.word_count > 0
+            THEN tbc.word_count ELSE 0 END), 0) AS total_word_count
+    FROM date_series ds
+    LEFT JOIN tomato_book_content tbc
+        ON DATE(tbc.update_time) = ds.dt
+        AND tbc.book_id = ?1
+    GROUP BY ds.dt
+    ORDER BY ds.dt ASC
+""", nativeQuery = true)
+    List<Object[]> findStatsLast30Days(String bookId);
+
+    /**
+     * 统计该书最近 365 天的更新情况，用于 GitHub 风格热力图。
+     * 时间窗口固定结束到今天。
+     */
+    @Query(value = """
+    WITH RECURSIVE date_series AS (
+        SELECT CURDATE() - INTERVAL 364 DAY AS dt
+        UNION ALL
+        SELECT dt + INTERVAL 1 DAY FROM date_series
+        WHERE dt + INTERVAL 1 DAY <= CURDATE()
     )
     SELECT
         ds.dt AS update_date,
@@ -39,7 +63,7 @@ public interface TomatoBookContentRepository extends JpaRepository<TomatoBookCon
     GROUP BY ds.dt
     ORDER BY ds.dt ASC
 """, nativeQuery = true)
-    List<Object[]> findStatsLast30Days(String bookId);
+    List<Object[]> findStatsLast365Days(String bookId);
 
     List<TomatoBookContent> findByBookIdOrderByRealChapterOrderAsc(String bookId);
 

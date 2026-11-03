@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -24,7 +26,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@Transactional
 @RequiredArgsConstructor
 public class TomatoBookContentService {
 
@@ -40,9 +41,10 @@ public class TomatoBookContentService {
      * @param content 要保存的TomatoBookContent对象
      * @return 保存后的TomatoBookContent对象
      */
+    @Transactional
     public TomatoBookContent save(TomatoBookContent content) {
         TomatoBookContent saved = repository.save(content);
-        log.info("保存章节成功, bookId={}, chapterId={}", saved.getBookId(), saved.getChapterId());
+        log.debug("保存章节成功, bookId={}, chapterId={}", saved.getBookId(), saved.getChapterId());
         return saved;
     }
 
@@ -63,9 +65,10 @@ public class TomatoBookContentService {
      *
      * @param chapterId 要删除的章节的唯一标识符
      */
+    @Transactional
     public void deleteByChapterId(String chapterId) {
         repository.deleteByChapterId(chapterId);
-        log.info("删除章节成功, chapterId={}", chapterId);
+        log.debug("删除章节成功, chapterId={}", chapterId);
     }
 
     /**
@@ -73,9 +76,10 @@ public class TomatoBookContentService {
      *
      * @param bookId 要删除其所有章节的书籍的唯一标识符
      */
+    @Transactional
     public void deleteByBookId(String bookId) {
         repository.deleteByBookId(bookId);
-        log.info("删除书籍所有章节成功, bookId={}", bookId);
+        log.debug("删除书籍所有章节成功, bookId={}", bookId);
     }
 
     /**
@@ -90,23 +94,124 @@ public class TomatoBookContentService {
 
         List<TomatoBookContent> chapters = findAllByBookIdOrderByRealChapterOrderAsc(bookId);
 
+        List<TomatoBookContent> targets = chapters.stream()
+                .filter(chapter -> forceUpdate || needsContentUpdate(chapter))
+                .toList();
+
+        int batchSize = 20;
         int successCount = 0;
         int failCount = 0;
-        int existCount = 0;
-        for (TomatoBookContent chapter : chapters) {
-            OperationStatus updated = updateChapter(chapter, forceUpdate);
-            switch (updated) {
-                case SUCCESS -> successCount++;
-                case FAIL -> failCount++;
-                case EXIST -> {
-                    existCount++;
+
+        for (int start = 0; start < targets.size(); start += batchSize) {
+            int end = Math.min(start + batchSize, targets.size());
+            List<TomatoBookContent> batch = targets.subList(start, end);
+            List<TomatoApiClient.ChapterTarget> chapterTargets = batch.stream()
+                    .map(chapter -> new TomatoApiClient.ChapterTarget(
+                            chapter.getChapterId(),
+                            chapter.getRealChapterOrder() == null ? 0 : chapter.getRealChapterOrder()))
+                    .toList();
+
+            Map<String, TomatoContentRecord> fetched =
+                    tomatoApiClient.getChapterContents(bookId, chapterTargets);
+
+            for (TomatoBookContent chapter : batch) {
+                TomatoContentRecord record = fetched.get(chapter.getChapterId());
+                if (record == null || record.content() == null || record.content().isBlank()) {
+                    failCount++;
                     continue;
                 }
+
+                chapter.setContent(record.content());
+                chapter.setWordCount(record.content().length());
+                if (record.updateTime() != null && !record.updateTime().isBlank()) {
+                    chapter.setUpdateTime(record.updateTime());
+                }
+                saveOrUpdate(chapter);
+                successCount++;
             }
-            try { Thread.sleep(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         }
 
-        return new UpdateResult(chapters.size(), successCount, failCount,existCount);
+        int existCount = chapters.size() - targets.size();
+        if (successCount > 0) {
+            log.info("[批量更新] bookId={} 成功更新 {} 章，失败 {} 章", bookId, successCount, failCount);
+        } else {
+            log.debug("[批量更新] bookId={} 无需更新，失败 {} 章", bookId, failCount);
+        }
+        return new UpdateResult(chapters.size(), successCount, failCount, existCount);
+    }
+
+    /**
+     * 生成图表前确保正文和字数完整。
+     * 已有正文只补字数；正文缺失时通过批量下载补齐，并保留章节更新时间。
+     */
+    public void ensureWordCountsForChart(String bookId) {
+        List<TomatoBookContent> chapters = findAllByBookIdOrderByRealChapterOrderAsc(bookId);
+        List<TomatoBookContent> missingWordCounts = chapters.stream()
+                .filter(chapter -> chapter.getWordCount() == null || chapter.getWordCount() <= 0)
+                .toList();
+        if (missingWordCounts.isEmpty()) {
+            return;
+        }
+
+        int repaired = 0;
+        List<TomatoBookContent> needFetch = new ArrayList<>();
+        for (TomatoBookContent chapter : missingWordCounts) {
+            if (chapter.getContent() != null && !chapter.getContent().isBlank()) {
+                chapter.setWordCount(chapter.getContent().length());
+                saveOrUpdate(chapter);
+                repaired++;
+            } else {
+                needFetch.add(chapter);
+            }
+        }
+
+        int fetched = 0;
+        int batchSize = 20;
+        for (int start = 0; start < needFetch.size(); start += batchSize) {
+            int end = Math.min(start + batchSize, needFetch.size());
+            List<TomatoBookContent> batch = needFetch.subList(start, end);
+            List<TomatoApiClient.ChapterTarget> targets = batch.stream()
+                    .map(chapter -> new TomatoApiClient.ChapterTarget(
+                            chapter.getChapterId(),
+                            chapter.getRealChapterOrder() == null ? 0 : chapter.getRealChapterOrder()))
+                    .toList();
+
+            Map<String, TomatoContentRecord> records =
+                    tomatoApiClient.getChapterContents(bookId, targets);
+            for (TomatoBookContent chapter : batch) {
+                TomatoContentRecord record = records.get(chapter.getChapterId());
+                if (record == null || record.content() == null || record.content().isBlank()) {
+                    continue;
+                }
+                chapter.setContent(record.content());
+                chapter.setWordCount(record.content().length());
+                if (record.updateTime() != null && !record.updateTime().isBlank()) {
+                    chapter.setUpdateTime(record.updateTime());
+                }
+                saveOrUpdate(chapter);
+                fetched++;
+            }
+        }
+
+        if (repaired + fetched > 0) {
+            log.info("[图表数据] bookId={} 补全字数 {} 章", bookId, repaired + fetched);
+        } else {
+            log.debug("[图表数据] bookId={} 未补全任何正文字数", bookId);
+        }
+    }
+
+    /**
+     * 判断章节是否需要拉取正文。
+     */
+    private boolean needsContentUpdate(TomatoBookContent chapter) {
+        if (chapter.getContent() == null || chapter.getContent().isBlank()) {
+            return true;
+        }
+        Integer wordCount = chapter.getWordCount();
+        if (wordCount == null || wordCount == 0) {
+            return true;
+        }
+        return chapter.getContent().length() < wordCount;
     }
 
 
@@ -116,13 +221,14 @@ public class TomatoBookContentService {
      * @param bookId 书籍的唯一标识符
      * @return 返回一个包含更新结果的对象，其中包括总章节数、成功添加的章节数以及失败添加的章节数
      */
+    @Transactional
     public UpdateResult updateChapterList(String bookId) {
         List<TomatoBookContent> localChapters = getChapterList(bookId);
 
         // 获取远程章节目录
         List<TomatoChapterRecord> remoteChapters = tomatoApiClient.getChapters(bookId);
         if (remoteChapters == null || remoteChapters.isEmpty()) {
-            log.warn("[补全目录] bookId={} 无法获取远程章节目录", bookId);
+            log.debug("[补全目录] bookId={} 无法获取远程章节目录", bookId);
             return new UpdateResult(localChapters.size(), 0, 0,0);
         }
 
@@ -148,7 +254,6 @@ public class TomatoBookContentService {
                     repository.save(chapter);
                     localChapters.add(chapter);
                     addedCount++;
-                    log.info("[补全目录] bookId={} 检测到缺失章节：{}，已补全存库", bookId, rec.itemId());
                 } catch (Exception e) {
                     failCount++;
                     log.error("[补全目录] bookId={} 补全章节 {} 失败", bookId, rec.itemId(), e);
@@ -158,6 +263,11 @@ public class TomatoBookContentService {
 
         localChapters.sort(Comparator.comparingInt(TomatoBookContent::getRealChapterOrder));
 
+        if (addedCount > 0) {
+            log.info("[补全目录] bookId={} 新增 {} 章，失败 {} 章", bookId, addedCount, failCount);
+        } else {
+            log.debug("[补全目录] bookId={} 无新增章节，失败 {} 章", bookId, failCount);
+        }
         return new UpdateResult(localChapters.size(), addedCount, failCount,0);
     }
 
@@ -179,9 +289,10 @@ public class TomatoBookContentService {
      * @param forceUpdate 是否强制更新章节，即使已有完整内容
      * @return 操作状态，可能值包括：SUCCESS（成功）、FAIL（失败）、EXIST（已存在无需更新）
      */
+    @Transactional
     public OperationStatus updateChapter(TomatoBookContent chapter, boolean forceUpdate) {
         if (chapter == null || chapter.getChapterId() == null) {
-            log.warn("[更新章节内容] chapter 为空或 chapterId 为空");
+            log.debug("[更新章节内容] chapter 为空或 chapterId 为空");
             return OperationStatus.FAIL;
         }
 
@@ -202,10 +313,10 @@ public class TomatoBookContentService {
                 chapter.setContent(record.content());
                 chapter.setWordCount(record.wordCount());
                 repository.save(chapter);
-                log.info("[更新章节内容] chapterId={} 成功更新", chapter.getChapterId());
+                log.debug("[更新章节内容] chapterId={} 成功更新", chapter.getChapterId());
                 return OperationStatus.SUCCESS;
             } else {
-                log.info("[更新章节内容] chapterId={} 更新失败，API未返回内容", chapter.getChapterId());
+                log.debug("[更新章节内容] chapterId={} 更新失败，API未返回内容", chapter.getChapterId());
                 return OperationStatus.FAIL;
             }
         } catch (Exception e) {
@@ -236,6 +347,14 @@ public class TomatoBookContentService {
         return repository.findStatsLast30Days(bookId);
     }
 
+    /**
+     * 查询指定书籍最近一年的更新统计，用于 GitHub 风格热力图。
+     */
+    public List<Object[]> findStatsLast365Days(String bookId) {
+        return repository.findStatsLast365Days(bookId);
+    }
+
+    @Transactional
     public TomatoBookContent saveOrUpdate(TomatoBookContent chapter) {
         Optional<TomatoBookContent> optional =
                 repository.findByChapterId(chapter.getChapterId());
@@ -270,6 +389,7 @@ public class TomatoBookContentService {
      * @param chapterId 章节ID
      * @return 累加后的失败次数；章节不存在时返回 -1
      */
+    @Transactional
     public int incrementFetchAttempts(String chapterId) {
         Optional<TomatoBookContent> optional = repository.findByChapterId(chapterId);
         if (optional.isEmpty()) return -1;
@@ -288,6 +408,7 @@ public class TomatoBookContentService {
      * @param chapterId 章节ID
      * @param maxAttempts 上限值
      */
+    @Transactional
     public void markFetchGivenUp(String chapterId, int maxAttempts) {
         Optional<TomatoBookContent> optional = repository.findByChapterId(chapterId);
         if (optional.isEmpty()) return;

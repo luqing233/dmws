@@ -7,6 +7,7 @@ import fun.luqing.dmws.entity.dmw.tomato.TomatoBookContent;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
 import fun.luqing.dmws.plugin.tomatoplugin.util.DateUtil;
+import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
 import fun.luqing.dmws.service.tomatoservice.TomatoBookContentService;
 import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
@@ -34,16 +35,17 @@ public class TomatoUpdateScheduler {
     private final TomatoApiClient tomatoApiClient;
     private final ConfigManager configManager;
 
-    @Scheduled(fixedDelay = 1000 * 60 * 4, initialDelay = 1000 * 30)
+    @Scheduled(fixedDelay = 1000 * 60 * 6, initialDelay = 1000 * 30)
     public void updateSubscribedBooks() {
+        TomatoLogContext.enterScheduled();
         try {
             List<TomatoBookList> books = bookListService.findAll();
             if (books.isEmpty()) return;
 
-            Bot bot = configManager.getBotContainer().robots.get(configManager.getDmwConfig().getBot_id());
+            Bot bot = configManager.getBotContainer().robots.get(configManager.getDmwConfig().getBotId());
             if (bot == null) {
-                log.warn("bot_id={} 尚未连接，跳过本次更新",
-                        configManager.getDmwConfig().getBot_id());
+                log.debug("bot_id={} 尚未连接，跳过本次更新",
+                        configManager.getDmwConfig().getBotId());
                 return;
             }
 
@@ -69,13 +71,17 @@ public class TomatoUpdateScheduler {
                 int filled = backfillMissingChapters(book);
 
                 if (changed) {
+                    log.info("《{}》检测到更新：{}", book.getBookName(), book.getLastTitle());
                     notifyGroups(book, bot);
-                } else if (filled > 0) {
+                }
+                if (filled > 0) {
                     log.info("《{}》补全了 {} 章历史内容", book.getBookName(), filled);
                 }
             }
         } catch (Exception e) {
             log.error("更新任务异常: {}", e.getMessage(), e);
+        } finally {
+            TomatoLogContext.exitScheduled();
         }
     }
 
@@ -96,7 +102,7 @@ public class TomatoUpdateScheduler {
         try {
             contentService.updateChapterList(book.getBookId());
         } catch (Exception e) {
-            log.warn("同步目录失败: bookId={} err={}", book.getBookId(), e.getMessage());
+            log.debug("同步目录失败: bookId={} err={}", book.getBookId(), e.getMessage());
         }
 
         List<TomatoBookContent> missing = contentService
@@ -134,7 +140,7 @@ public class TomatoUpdateScheduler {
                 // 书不存在之类的永久失败直接放弃，不必耗尽重试次数
                 String errorCode = tomatoApiClient.getLastContentErrorCode();
                 if (!TomatoApiClient.isRetryable(errorCode)) {
-                    log.warn("章节 {} 遇到不可重试的错误 {}，直接放弃: 《{}》{}",
+                    log.debug("章节 {} 遇到不可重试的错误 {}，直接放弃: 《{}》{}",
                             chapter.getChapterId(), errorCode, book.getBookName(), chapter.getTitle());
                     contentService.markFetchGivenUp(chapter.getChapterId(), MAX_FETCH_ATTEMPTS);
                     continue;
@@ -143,7 +149,7 @@ public class TomatoUpdateScheduler {
                 // 抓取失败时累加计数，达到上限后不再重试
                 int attempts = contentService.incrementFetchAttempts(chapter.getChapterId());
                 if (attempts >= MAX_FETCH_ATTEMPTS) {
-                    log.warn("章节 {} 已连续失败 {} 次，停止重试: 《{}》{}",
+                    log.debug("章节 {} 已连续失败 {} 次，停止重试: 《{}》{}",
                             chapter.getChapterId(), attempts, book.getBookName(), chapter.getTitle());
                 }
             }

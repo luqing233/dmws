@@ -2,6 +2,7 @@ package fun.luqing.dmws.service.tomatoservice;
 
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
+import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
 import fun.luqing.dmws.repository.dmw.TomatoBookListRepository;
 import fun.luqing.dmws.repository.dmw.TomatoSubscriptionGroupRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,19 +24,19 @@ public class TomatoSubscriptionGroupService {
 
     // 查询所有订阅
     public List<TomatoSubscriptionGroup> findAll() {
-        log.info("查询所有订阅记录");
+        TomatoLogContext.info(log, "查询所有订阅记录");
         return repository.findAll();
     }
 
     // 根据 ID 查询
     public Optional<TomatoSubscriptionGroup> findById(Long id) {
-        log.info("查询订阅记录, id={}", id);
+        TomatoLogContext.info(log, "查询订阅记录, id={}", id);
         return repository.findById(id);
     }
 
     // 根据群号和书籍ID查询
     public Optional<TomatoSubscriptionGroup> findByGroupIdAndBookId(long groupId, String bookId) {
-        log.info("查询订阅记录, groupId={}, bookId={}", groupId, bookId);
+        TomatoLogContext.info(log, "查询订阅记录, groupId={}, bookId={}", groupId, bookId);
         return repository.findByGroupIdAndBookId(groupId, bookId);
     }
 
@@ -72,13 +73,13 @@ public class TomatoSubscriptionGroupService {
 
     // 查询指定群的订阅列表
     public List<TomatoSubscriptionGroup> findByGroupId(long groupId) {
-        log.info("查询指定群的订阅列表, groupId={}", groupId);
+        TomatoLogContext.info(log, "查询指定群的订阅列表, groupId={}", groupId);
         return repository.findByGroupId(groupId);
     }
 
     // 查询指定书籍的订阅列表
     public List<TomatoSubscriptionGroup> findByBookId(String bookId) {
-        log.info("查询指定书籍的订阅列表, bookId={}", bookId);
+        TomatoLogContext.info(log, "查询指定书籍的订阅列表, bookId={}", bookId);
         return repository.findByBookId(bookId);
     }
 

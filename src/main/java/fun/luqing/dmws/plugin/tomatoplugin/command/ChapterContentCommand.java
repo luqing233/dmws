@@ -118,8 +118,8 @@ public class ChapterContentCommand {
         }
 
         List<Map<String, Object>> forwardMsg = generateForwardMsg(
-                configManager.getDmwConfig().getBot_id(),
-                configManager.getDmwConfig().getBot_name(),
+                configManager.getDmwConfig().getBotId(),
+                configManager.getDmwConfig().getBotName(),
                 messageList
         );
         bot.sendGroupForwardMsg(groupId, forwardMsg);

@@ -13,7 +13,7 @@ Source code lives under `src/main/java/fun/luqing/dmws`, organized by responsibi
 - `config/`, `common/`: framework wiring and shared utilities.
 - `resources/`: logging, banner, and `application.example.yaml`.
 
-Tests live under `src/test/java`. Runtime configuration is in `config/config.json`, which is Git-ignored; use `config/config.example.json` as the template.
+Tests live under `src/test/java`. Runtime configuration is in `src/main/resources/application.yaml`, which is Git-ignored; use `application.example.yaml` as the template.
 
 ## Build, Test, and Development Commands
 
@@ -27,7 +27,7 @@ Run commands from the repository root. Use `mvnw.cmd` instead of `./mvnw` on Win
 
 - `test` compiles and runs JUnit tests.
 - `clean package` produces the executable Spring Boot jar.
-- `spring-boot:run` starts the bot locally. It needs a valid `config/config.json`, matching `application.yaml`, and reachable MySQL databases.
+- `spring-boot:run` starts the bot locally. It needs a valid `application.yaml` and reachable MySQL databases.
 
 ## Coding Style & Naming Conventions
 
@@ -54,4 +54,4 @@ For pull requests, summarize intent and behavior changes, state the commands run
 
 ## Security & Configuration Tips
 
-Do not commit `config/config.json`, `application.yaml`, API keys, bot tokens, database passwords, or other secrets. Update the example templates when configuration surface changes, and keep real credentials in ignored local files.
+Do not commit `application.yaml`, API keys, bot tokens, database passwords, or other secrets. Update `application.example.yaml` when configuration surface changes, and keep real credentials in the ignored local file.

@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.config.McpConfig;
+import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -31,9 +32,9 @@ public class TomatoApiClient {
     private static final int DIRECTORY_MAX_PAGES = 100;
     /** 下载器批量读取单次上限 */
     private static final int MAX_BATCH = 20;
-    /** 批量下载的轮询次数与间隔（每次 3 秒，最多约 3 分钟） */
-    private static final int BATCH_POLL_TIMES = 60;
-    private static final long BATCH_POLL_INTERVAL_MS = 3000L;
+    /** 批量下载的轮询次数与间隔（每次 0.5 秒，最多约 3 分钟） */
+    private static final int BATCH_POLL_TIMES = 360;
+    private static final long BATCH_POLL_INTERVAL_MS = 500L;
 
     private final ConfigManager configManager;
     private McpClient fanqie;
@@ -262,7 +263,7 @@ public class TomatoApiClient {
         TomatoContentRecord fromDownloader = fetchFromDownloader(chapterId);
         if (fromDownloader != null) return fromDownloader;
 
-        log.info("下载器未能提供章节 {}, 回退到在线接口", chapterId);
+        TomatoLogContext.info(log, "下载器未能提供章节 {}, 回退到在线接口", chapterId);
         return fetchFromOnline(chapterId);
     }
 
@@ -278,7 +279,7 @@ public class TomatoApiClient {
         TomatoContentRecord fromDownloader = fetchFromDownloader(bookId, chapterId, order);
         if (fromDownloader != null) return fromDownloader;
 
-        log.info("下载器未能提供章节 {}, 回退到在线接口", chapterId);
+        TomatoLogContext.info(log, "下载器未能提供章节 {}, 回退到在线接口", chapterId);
         return fetchFromOnline(chapterId);
     }
 

@@ -8,7 +8,6 @@ import com.mikuac.shiro.core.Bot;
 import com.mikuac.shiro.dto.event.message.AnyMessageEvent;
 import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.config.ConfigManager;
-import fun.luqing.dmws.enums.AiModelType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.aop.support.AopUtils;
@@ -52,15 +51,6 @@ public class HelpPlugin {
                     String cmdName = !info.cmd().isEmpty() ? info.cmd() : info.startWith();
                     String desc = info.desc();
 
-                    // 动态拼接AI模型列表（如果指令含“切换模型”）
-                    if (cmdName.contains("切换模型")) {
-                        StringBuilder models = new StringBuilder(desc);
-                        for (AiModelType type : AiModelType.values()) {
-                            models.append("\n").append("- ").append(type.getValue());
-                        }
-                        desc = models.toString();
-                    }
-
                     messageList.add(cmdName + " - " + desc);
                 }
             }
@@ -71,8 +61,8 @@ public class HelpPlugin {
         }
 
         List<Map<String, Object>> forwardMsg = ShiroUtils.generateForwardMsg(
-                configManager.getDmwConfig().getBot_id(),
-                configManager.getDmwConfig().getBot_name(),
+                configManager.getDmwConfig().getBotId(),
+                configManager.getDmwConfig().getBotName(),
                 messageList
         );
 

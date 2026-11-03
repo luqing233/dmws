@@ -39,3 +39,24 @@ shiro:
 logging:
   level:
     root: WARN
+
+dmws:
+  ws-url: "ws://127.0.0.1:8080/ws"
+  http-url: "http://127.0.0.1:8080"
+  max-messages: 40
+  bot-id: 0
+  bot-name: "机器人名称"
+  master: [0]
+  file-server-port: 8765
+  file-server-host: "127.0.0.1"
+  mcp:
+    fanqie:
+      url: "http://127.0.0.1:18000/mcp"
+      token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      timeout: 30
+      read-timeout: 300
+    downloader:
+      url: "http://127.0.0.1:18001/mcp"
+      token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      timeout: 30
+      read-timeout: 300

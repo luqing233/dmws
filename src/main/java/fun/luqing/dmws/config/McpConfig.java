@@ -6,7 +6,7 @@ import lombok.Setter;
 /**
  * 番茄小说 MCP 服务配置。
  * 分为在线小说接口（fanqie）与本地下载器（downloader）两个 Streamable HTTP 服务。
- * 真实的 url 与 token 请在 config.json 中配置，不要写进源码。
+ * 真实的 url 与 token 请在 application.yaml 的 dmws.mcp 下配置，不要写进源码。
  */
 @Getter
 @Setter
