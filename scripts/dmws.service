@@ -1,0 +1,19 @@
+[Unit]
+Description=DMWS OneBot service
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/luqing/bot/dmw
+ExecStart=/usr/bin/java -Xms256m -Xmx1024m -Dfile.encoding=UTF-8 -jar /www/luqing/bot/dmw/dmws-1.1.1.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

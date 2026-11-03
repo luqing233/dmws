@@ -7,16 +7,6 @@ spring:
       username: your_username
       password: your_password
       driver-class-name: com.mysql.cj.jdbc.Driver
-    economy:
-      url: jdbc:mysql://localhost:3306/economy
-      username: your_username
-      password: your_password
-      driver-class-name: com.mysql.cj.jdbc.Driver
-    hy-economy:
-      url: jdbc:mysql://localhost:3306/test
-      username: your_username
-      password: your_password
-      driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     open-in-view: false
     hibernate:
@@ -49,12 +39,35 @@ dmws:
   master: [0]
   file-server-port: 8765
   file-server-host: "127.0.0.1"
+  mcp-server-enabled: true
+  mcp-server-token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   mcp:
+    economy:
+      operator-id: 0
     downloader:
       url: "http://localhost:8001/mcp"
       token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       timeout: 30
       read-timeout: 300
+  economy:
+    enabled: true
+    time-zone: "Asia/Shanghai"
+    sign-min: 50
+    sign-max: 500
+    bank-weekly-rate: 0.005
+    raffle-price: 1000
+    raffle-ten-price: 10000
+    raffle-cooldown-seconds: 60
+    raffle-ten-cooldown-seconds: 600
+    red-packet-expire-hours: 24
+    private-bank-min-capital: 100000
+    private-bank-loan-rate: 0.10
+    private-bank-max-loan-days: 30
+    fishing-rod-price: 500
+    fishing-cost: 20
+    fishing-cooldown-seconds: 30
+    rob-cooldown-seconds: 300
+    rob-fine: 50
 
 server:
-  port: 0
+  port: 8002

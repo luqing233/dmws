@@ -18,6 +18,8 @@ public class DmwConfig {
     private long[] master;
     private int fileServerPort = 8765;
     private String fileServerHost = "127.0.0.1";
+    private boolean mcpServerEnabled = false;
+    private String mcpServerToken;
 
     /**
      * 番茄小说 MCP 服务配置（在线小说接口与本地下载器）。

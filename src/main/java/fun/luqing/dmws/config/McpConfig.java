@@ -13,6 +13,14 @@ import lombok.Setter;
 public class McpConfig {
 
     private McpServer downloader = new McpServer("http://localhost:8001/mcp");
+    private Economy economy = new Economy();
+
+    @Getter
+    @Setter
+    public static class Economy {
+        /** Local QQ operator used by economy MCP write tools. */
+        private Long operatorId;
+    }
 
     /**
      * 单个 MCP 服务端点。

@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * MCP（Model Context Protocol）Streamable HTTP 客户端。
@@ -29,6 +30,7 @@ public class McpClient {
     private final String name;
     private final McpConfig.McpServer server;
     private final HttpClient httpClient;
+    private final AtomicLong requestId = new AtomicLong(1);
 
     private volatile String sessionId;
     private volatile boolean initialized;
@@ -74,7 +76,7 @@ public class McpClient {
      * @param args  工具参数，可为 null
      * @return 工具返回的 JSON；调用失败返回 null
      */
-    public JsonNode callTool(String tool, ObjectNode args) {
+    public synchronized JsonNode callTool(String tool, ObjectNode args) {
         JsonNode result = callToolInternal(tool, args);
         // 只有真正的传输层失败（非工具业务错误）才重建会话重试
         if (result == null && sessionBroken) {
@@ -163,7 +165,7 @@ public class McpClient {
         try {
             ObjectNode payload = MAPPER.createObjectNode();
             payload.put("jsonrpc", "2.0");
-            payload.put("id", 1);
+            payload.put("id", requestId.incrementAndGet());
             payload.put("method", "initialize");
             payload.set("params", params);
 
@@ -227,7 +229,7 @@ public class McpClient {
         try {
             ObjectNode payload = MAPPER.createObjectNode();
             payload.put("jsonrpc", "2.0");
-            payload.put("id", 2);
+            payload.put("id", requestId.incrementAndGet());
             payload.put("method", method);
             payload.set("params", params);
 

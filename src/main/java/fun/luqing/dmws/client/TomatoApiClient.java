@@ -34,7 +34,7 @@ public class TomatoApiClient {
     private static final long BATCH_POLL_INTERVAL_MS = 500L;
 
     private final ConfigManager configManager;
-    private McpClient downloader;
+    private volatile McpClient downloader;
     /** 最近一次正文获取失败的结构化错误码 */
     private volatile String lastContentErrorCode;
 
@@ -42,7 +42,7 @@ public class TomatoApiClient {
         this.configManager = configManager;
     }
 
-    private McpClient downloader() {
+    private synchronized McpClient downloader() {
         if (downloader == null) {
             McpConfig.McpServer server = config().getDownloader();
             downloader = new McpClient("番茄下载", server);
@@ -136,6 +136,14 @@ public class TomatoApiClient {
         // 先按 item_ids 离散下载，只下缺的那几章，不会把中间章节当成连续区间
         downloadDiscrete(bookId, batch);
         readBatch(bookId, batch, result);
+        // 上游偶尔会变更 item_id，批量接口会整批失败；逐章重试并等待新 ID 下载。
+        for (ChapterTarget target : batch) {
+            if (result.containsKey(target.chapterId())) continue;
+            TomatoContentRecord record = getChapterContent(bookId, target.chapterId(), target.order());
+            if (record != null) {
+                result.put(target.chapterId(), record);
+            }
+        }
         return result;
     }
 
@@ -293,7 +301,8 @@ public class TomatoApiClient {
         root = readDownloadedChapter(bookId, chapterId);
         if (root == null) {
             lastContentErrorCode = downloader().getLastToolErrorCode();
-            log.debug("章节 {} 下载后仍不可读（bookId={} order={}）", chapterId, bookId, order);
+            log.debug("章节 {} 下载后仍不可读，忽略旧章节以避免误报（bookId={} order={}）",
+                    chapterId, bookId, order);
             return null;
         }
         lastContentErrorCode = null;
