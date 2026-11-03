@@ -10,7 +10,7 @@
     </parent>
     <groupId>fun.luqing</groupId>
     <artifactId>dmws</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <name>dmws</name>
     <description>dmws</description>
     <url/>
