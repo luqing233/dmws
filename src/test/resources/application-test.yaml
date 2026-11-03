@@ -1,0 +1,44 @@
+spring:
+  datasource:
+    dmw:
+      url: jdbc:h2:mem:dmw;MODE=MySQL;DB_CLOSE_DELAY=-1
+      username: sa
+      password:
+      driver-class-name: org.h2.Driver
+    economy:
+      url: jdbc:h2:mem:economy;MODE=MySQL;DB_CLOSE_DELAY=-1
+      username: sa
+      password:
+      driver-class-name: org.h2.Driver
+    hy-economy:
+      url: jdbc:h2:mem:hyeconomy;MODE=MySQL;DB_CLOSE_DELAY=-1
+      username: sa
+      password:
+      driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  main:
+    banner-mode: off
+    web-application-type: servlet
+
+server:
+  port: 0
+
+shiro:
+  ws:
+    client:
+      enable: false
+
+dmws:
+  bot-id: 0
+  bot-name: test
+  master: []
+  file-server-port: 0
+  file-server-host: 127.0.0.1
+
+logging:
+  level:
+    root: WARN

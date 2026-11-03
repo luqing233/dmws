@@ -12,9 +12,9 @@ import lombok.Setter;
 @Setter
 public class McpConfig {
 
-    private McpServer fanqie = new McpServer("http://127.0.0.1:18000/mcp");
+    private McpServer fanqie = new McpServer("http://localhost:8000/mcp");
 
-    private McpServer downloader = new McpServer("http://127.0.0.1:18001/mcp");
+    private McpServer downloader = new McpServer("http://localhost:8001/mcp");
 
     /**
      * 单个 MCP 服务端点。
@@ -22,7 +22,7 @@ public class McpConfig {
     @Getter
     @Setter
     public static class McpServer {
-        /** 服务地址，例如 http://127.0.0.1:18000/mcp */
+        /** 服务地址，例如 http://localhost:8000/mcp */
         private String url;
         /** Authorization 头的完整取值，例如 "Bearer xxxx" */
         private String token;

@@ -27,7 +27,7 @@ spring:
         format_sql: false
   main:
     banner-mode: console
-    web-application-type: none
+    web-application-type: servlet
 
 shiro:
   ws:
@@ -51,12 +51,15 @@ dmws:
   file-server-host: "127.0.0.1"
   mcp:
     fanqie:
-      url: "http://127.0.0.1:18000/mcp"
+      url: "http://localhost:8000/mcp"
       token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       timeout: 30
       read-timeout: 300
     downloader:
-      url: "http://127.0.0.1:18001/mcp"
+      url: "http://localhost:8001/mcp"
       token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       timeout: 30
       read-timeout: 300
+
+server:
+  port: 0
