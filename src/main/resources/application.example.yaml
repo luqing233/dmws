@@ -50,11 +50,6 @@ dmws:
   file-server-port: 8765
   file-server-host: "127.0.0.1"
   mcp:
-    fanqie:
-      url: "http://localhost:8000/mcp"
-      token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-      timeout: 30
-      read-timeout: 300
     downloader:
       url: "http://localhost:8001/mcp"
       token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

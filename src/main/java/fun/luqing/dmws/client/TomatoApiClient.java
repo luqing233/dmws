@@ -15,10 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 番茄小说客户端，通过 MCP 服务获取数据。
- * <p>
- * 在线小说接口（fanqie）负责书目、目录与章节正文；
- * 本地下载器（downloader）补充章节序号与发布时间。
+ * 番茄小说客户端，只通过本地下载器 MCP 获取数据。
  */
 @Slf4j
 @Component
@@ -37,21 +34,12 @@ public class TomatoApiClient {
     private static final long BATCH_POLL_INTERVAL_MS = 500L;
 
     private final ConfigManager configManager;
-    private McpClient fanqie;
     private McpClient downloader;
     /** 最近一次正文获取失败的结构化错误码 */
     private volatile String lastContentErrorCode;
 
     public TomatoApiClient(ConfigManager configManager) {
         this.configManager = configManager;
-    }
-
-    private McpClient fanqie() {
-        if (fanqie == null) {
-            McpConfig.McpServer server = config().getFanqie();
-            fanqie = new McpClient("番茄小说", server);
-        }
-        return fanqie;
     }
 
     private McpClient downloader() {
@@ -85,22 +73,45 @@ public class TomatoApiClient {
         ObjectNode args = MAPPER.createObjectNode();
         args.put("book_id", bookId);
 
-        JsonNode root = fanqie().callTool("online_get_book_detail", args);
+        JsonNode root = downloader().callTool("tnd_preview_book", args);
         if (root == null) return null;
 
-        JsonNode detail = root.path("detail");
-        if (detail.isMissingNode() || detail.isEmpty()) {
-            log.warn("get_book_detail 未返回书目数据: bookId={}", bookId);
+        String bookName = root.path("book_name").asText("");
+        if (bookName.isBlank()) {
+            log.warn("tnd_preview_book 未返回书名: bookId={}", bookId);
             return null;
         }
 
-        String latestChapterId = detail.path("latest_chapter_id").asText("");
+        String latestChapterTitle = root.path("last_chapter_title").asText("");
+        String latestChapterId = "";
+        String latestPublishTime = "";
+        int chapterCount = root.path("chapter_count").asInt(0);
+
+        if (chapterCount > 0) {
+            ObjectNode latestArgs = MAPPER.createObjectNode();
+            latestArgs.put("book_id", bookId);
+            latestArgs.put("offset", Math.max(0, chapterCount - 1));
+            latestArgs.put("limit", 1);
+
+            JsonNode directory = downloader().callTool("tnd_get_chapter_times", latestArgs);
+            if (directory != null) {
+                JsonNode chapters = directory.path("chapters");
+                if (chapters.isArray() && !chapters.isEmpty()) {
+                    JsonNode latest = chapters.get(0);
+                    latestChapterId = latest.path("item_id").asText("");
+                    String title = latest.path("title").asText("");
+                    if (!title.isBlank()) latestChapterTitle = title;
+                    latestPublishTime = latest.path("first_pass_time").path("beijing_time").asText("");
+                }
+            }
+        }
+
         return new TomatoUpdateRecord(
-                detail.path("book_name").asText(""),
-                detail.path("latest_chapter_title").asText(""),
+                bookName,
+                latestChapterTitle,
                 latestChapterId,
-                fetchLatestPublishTime(bookId, latestChapterId),
-                detail.path("word_count").asLong(0L)
+                latestPublishTime,
+                root.path("word_count").asLong(0L)
         );
     }
 
@@ -251,23 +262,6 @@ public class TomatoApiClient {
     }
 
     /**
-     * 获取章节正文。
-     * <p>
-     * 优先使用下载器：先读本地已下载内容，没有则触发单章下载并等待完成再读；
-     * 下载器不可用时回退到在线接口。
-     *
-     * @param chapterId 章节ID
-     * @return 章节正文与元数据；获取失败返回 null
-     */
-    public TomatoContentRecord getChapterContent(String chapterId) {
-        TomatoContentRecord fromDownloader = fetchFromDownloader(chapterId);
-        if (fromDownloader != null) return fromDownloader;
-
-        TomatoLogContext.info(log, "下载器未能提供章节 {}, 回退到在线接口", chapterId);
-        return fetchFromOnline(chapterId);
-    }
-
-    /**
      * 获取章节正文，调用方已知章节所属书籍与序号时使用，避免反查。
      *
      * @param bookId    所属书籍ID
@@ -279,17 +273,8 @@ public class TomatoApiClient {
         TomatoContentRecord fromDownloader = fetchFromDownloader(bookId, chapterId, order);
         if (fromDownloader != null) return fromDownloader;
 
-        TomatoLogContext.info(log, "下载器未能提供章节 {}, 回退到在线接口", chapterId);
-        return fetchFromOnline(chapterId);
-    }
-
-    /**
-     * 从下载器获取章节正文：本地已有则直接读，否则触发单章下载后重读。
-     */
-    private TomatoContentRecord fetchFromDownloader(String chapterId) {
-        ChapterRef ref = resolveChapterRef(chapterId);
-        if (ref == null) return null;
-        return fetchFromDownloader(ref.bookId(), chapterId, ref.order());
+        TomatoLogContext.info(log, "下载器未能提供章节 {}", chapterId);
+        return null;
     }
 
     private TomatoContentRecord fetchFromDownloader(String bookId, String chapterId, int order) {
@@ -392,39 +377,8 @@ public class TomatoApiClient {
     }
 
     /**
-     * 在线接口取正文，作为下载器不可用时的兜底。
-     */
-    private TomatoContentRecord fetchFromOnline(String chapterId) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("item_id", chapterId);
-
-        JsonNode root = fanqie().callTool("online_get_chapter_content", args);
-        if (root == null) return null;
-
-        JsonNode content = root.path("content");
-        if (content.isMissingNode() || content.isEmpty()) {
-            log.warn("online_get_chapter_content 未返回章节数据: chapterId={}", chapterId);
-            return null;
-        }
-
-        String text = content.path("content").asText("");
-        String bookId = content.path("book_id").asText("");
-        ChapterRef ref = resolveChapterRef(chapterId);
-
-        return new TomatoContentRecord(
-                bookId,
-                "",
-                ref != null ? ref.order() : 0,
-                content.path("title").asText(""),
-                text,
-                resolveChapterTime(bookId, chapterId),
-                countWords(text)
-        );
-    }
-
-    /**
      * 获取指定书籍的完整章节目录。
-     * 在线接口按页返回且不含序号与付费标记，这里循环翻页并补齐缺失字段。
+     * 目录、序号、付费标记与发布时间全部来自下载器 MCP。
      *
      * @param bookId 书籍ID
      * @return 章节列表，按章节序号升序；获取失败返回空列表
@@ -439,73 +393,14 @@ public class TomatoApiClient {
             args.put("offset", offset);
             args.put("limit", DIRECTORY_PAGE_SIZE);
 
-            JsonNode root = fanqie().callTool("online_get_book_directory", args);
-            if (root == null) break;
-
-            JsonNode directory = root.path("directory");
-            JsonNode chapters = directory.path("chapters");
-            if (!chapters.isArray() || chapters.isEmpty()) break;
-
-            int index = 0;
-            for (JsonNode ch : chapters) {
-                int order = offset + index + 1;
-                list.add(new TomatoChapterRecord(
-                        ch.path("item_id").asText(""),
-                        ch.path("title").asText(""),
-                        ch.path("volume").asText(""),
-                        false,
-                        false,
-                        false,
-                        0,
-                        order,
-                        ""
-                ));
-                index++;
-            }
-
-            if (!directory.path("has_more").asBoolean(false)) break;
-            JsonNode next = directory.path("next_offset");
-            if (!next.isNumber() && !next.isTextual()) break;
-            offset = next.asInt(offset + index);
-        }
-
-        // 用下载器补齐序号、付费标记与发布时间
-        enrichWithTimes(list, bookId);
-        return list;
-    }
-
-    // ===============================
-    //   补充字段
-    // ===============================
-
-    /**
-     * 从下载器的章节时间接口补齐序号、付费标记与发布时间。
-     * 该接口不可用时保留在线接口的推断值，不影响主流程。
-     */
-    private void enrichWithTimes(List<TomatoChapterRecord> list, String bookId) {
-        if (list.isEmpty()) return;
-
-        List<TomatoChapterRecord> enriched = new ArrayList<>(list.size());
-        int offset = 0;
-        boolean failed = false;
-
-        for (int page = 0; page < DIRECTORY_MAX_PAGES && !failed; page++) {
-            ObjectNode args = MAPPER.createObjectNode();
-            args.put("book_id", bookId);
-            args.put("offset", offset);
-            args.put("limit", DIRECTORY_PAGE_SIZE);
-
             JsonNode root = downloader().callTool("tnd_get_chapter_times", args);
-            if (root == null) {
-                failed = true;
-                break;
-            }
+            if (root == null) break;
 
             JsonNode chapters = root.path("chapters");
             if (!chapters.isArray() || chapters.isEmpty()) break;
 
             for (JsonNode ch : chapters) {
-                enriched.add(new TomatoChapterRecord(
+                list.add(new TomatoChapterRecord(
                         ch.path("item_id").asText(""),
                         ch.path("title").asText(""),
                         ch.path("volume").asText(""),
@@ -519,65 +414,12 @@ public class TomatoApiClient {
             }
 
             if (!root.path("has_more").asBoolean(false)) break;
-            offset = root.path("next_offset").asInt(offset + chapters.size());
+            JsonNode next = root.path("next_offset");
+            if (!next.isNumber() && !next.isTextual()) break;
+            offset = next.asInt(offset + chapters.size());
         }
 
-        if (failed || enriched.isEmpty()) {
-            log.warn("无法从下载器补齐章节时间，保留在线接口推断值: bookId={}", bookId);
-            return;
-        }
-
-        list.clear();
-        list.addAll(enriched);
-    }
-
-    private String fetchLatestPublishTime(String bookId, String latestChapterId) {
-        if (latestChapterId == null || latestChapterId.isBlank()) return "";
-
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        args.put("item_id", latestChapterId);
-        args.put("limit", 1);
-
-        JsonNode root = downloader().callTool("tnd_get_chapter_times", args);
-        if (root == null) return "";
-
-        JsonNode chapters = root.path("chapters");
-        if (!chapters.isArray() || chapters.isEmpty()) return "";
-
-        return chapters.get(0).path("first_pass_time").path("beijing_time").asText("");
-    }
-
-    /**
-     * 章节的定位信息：所属书籍、章节序号与发布时间。
-     */
-    private record ChapterRef(String bookId, int order) {
-    }
-
-    /**
-     * 解析 chapterId 的定位信息。
-     * 先通过在线正文接口拿到 bookId，再用下载器的单章时间接口取序号，
-     * 避免为查一章而翻完整个目录。
-     */
-    private ChapterRef resolveChapterRef(String chapterId) {
-        String bookId = resolveBookId(chapterId);
-        if (bookId == null || bookId.isBlank()) {
-            log.warn("无法解析章节 {} 所属的 bookId", chapterId);
-            return null;
-        }
-
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        args.put("item_id", chapterId);
-
-        JsonNode root = downloader().callTool("tnd_get_chapter_times", args);
-        if (root != null) {
-            JsonNode chapters = root.path("chapters");
-            if (chapters.isArray() && !chapters.isEmpty()) {
-                return new ChapterRef(bookId, chapters.get(0).path("order").asInt(0));
-            }
-        }
-        return new ChapterRef(bookId, 0);
+        return list;
     }
 
     /**
@@ -597,16 +439,4 @@ public class TomatoApiClient {
         return chapters.get(0).path("first_pass_time").path("beijing_time").asText("");
     }
 
-    /**
-     * 通过在线正文接口反查章节所属的 bookId。
-     */
-    private String resolveBookId(String chapterId) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("item_id", chapterId);
-
-        JsonNode root = fanqie().callTool("online_get_chapter_content", args);
-        if (root == null) return null;
-
-        return root.path("content").path("book_id").asText("");
-    }
 }
