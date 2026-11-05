@@ -9,6 +9,7 @@ import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.entity.dmw.economy.EconomyFishingCatch;
 import fun.luqing.dmws.service.dmw.economy.EconomyFishingService;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -22,10 +23,11 @@ import java.util.List;
 public class EconomyFishingPlugin {
 
     private final EconomyFishingService fishingService;
+    private final EconomyPlayerNameService names;
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(钓鱼|抛竿|fish)$")
-    @CommandInfo(cmd = "钓鱼", desc = "消耗金币钓鱼，奖励取决于鱼类和尺寸")
+    @CommandInfo(cmd = "钓鱼", desc = "按鱼种、实际尺寸和鱼竿等级结算收入，显示描述与净收益")
     public void fish(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             EconomyFishingService.FishingResult result = fishingService.fish(
@@ -33,17 +35,7 @@ public class EconomyFishingPlugin {
                     EconomyCommandSupport.nickname(event),
                     EconomyCommandSupport.operationId("fishing", event)
             );
-            if (!result.success()) {
-                return "鱼跑掉了……\n消耗: " + EconomyMoney.format(result.cost())
-                        + (result.luckUsed() ? "\n本次消耗了幸运鱼饵。" : "")
-                        + "\n钱包余额: " + EconomyMoney.format(result.walletBalance());
-            }
-            return "钓到了 " + result.fishName() + "！"
-                    + "\n尺寸: " + EconomyMoney.format(result.size()) + " cm"
-                    + "\n获得: " + EconomyMoney.format(result.reward())
-                    + "\n消耗: " + EconomyMoney.format(result.cost())
-                    + (result.luckUsed() ? "\n本次消耗了幸运鱼饵。" : "")
-                    + "\n钱包余额: " + EconomyMoney.format(result.walletBalance());
+            return fun.luqing.dmws.service.dmw.economy.EconomyFishingText.receipt(result);
         });
     }
 
@@ -63,7 +55,7 @@ public class EconomyFishingPlugin {
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(升级鱼竿)$")
-    @CommandInfo(cmd = "升级鱼竿", desc = "消耗金币提升鱼竿等级，最高 5 级")
+    @CommandInfo(cmd = "升级鱼竿", desc = "消耗当前等级×1000金币升级，最高100级，保留历史等级")
     public void upgrade(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             int level = fishingService.upgradeRod(
@@ -82,7 +74,7 @@ public class EconomyFishingPlugin {
         EconomyCommandSupport.execute(
                 bot,
                 event,
-                () -> "当前鱼竿等级: " + fishingService.rodLevel(event.getUserId())
+                () -> fishingService.describeRod(event.getUserId())
         );
     }
 
@@ -99,14 +91,14 @@ public class EconomyFishingPlugin {
             for (EconomyFishingCatch item : catches) {
                 builder.append("\n- ").append(item.getFishName())
                         .append(" ").append(EconomyMoney.format(item.getSizeCm())).append(" cm")
-                        .append("  ").append(EconomyMoney.format(item.getReward())).append(" 金币");
+                        .append("  收入 ").append(EconomyMoney.format(item.getReward())).append(" 金币");
             }
             return builder.toString();
         });
     }
 
     @GroupMessageHandler
-    @MessageHandlerFilter(cmd = "^钓鱼排行榜$")
+    @MessageHandlerFilter(cmd = "^(钓鱼排行榜|钓鱼榜)$")
     @CommandInfo(cmd = "钓鱼排行榜", desc = "查看最大尺寸钓鱼排行")
     public void leaderboard(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
@@ -116,10 +108,11 @@ public class EconomyFishingPlugin {
                 return "暂无钓鱼排行数据";
             }
             StringBuilder builder = new StringBuilder("钓鱼排行榜");
+            var playerNames = names.resolveAll(bot, event.getGroupId(), entries.stream().map(EconomyFishingService.LeaderboardEntry::userId).toList());
             int rank = 1;
             for (EconomyFishingService.LeaderboardEntry entry : entries) {
                 builder.append("\n").append(rank++).append(". ")
-                        .append(entry.userId()).append("  ")
+                        .append(playerNames.get(entry.userId())).append("  ")
                         .append(entry.fishName()).append("  ")
                         .append(EconomyMoney.format(entry.size())).append(" cm");
             }

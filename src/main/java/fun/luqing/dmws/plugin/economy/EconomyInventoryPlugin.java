@@ -47,8 +47,18 @@ public class EconomyInventoryPlugin {
                         .append(" [").append(item.getItemCode()).append("]")
                         .append(" x").append(item.getQuantity());
             }
+            if (items.stream().anyMatch(i -> i.getItemCode().equals("electric-baton"))) {
+                builder.append("\n\n").append(itemService.equipment(event.getUserId()).text());
+            }
             return builder.toString();
         });
+    }
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^(电棍电量|电棍状态)$")
+    @CommandInfo(cmd = "电棍电量", desc = "查看电棍电量与充电进度")
+    public void batonStatus(Bot bot, GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot, event, () -> itemService.equipment(event.getUserId()).text());
     }
 
     @GroupMessageHandler
@@ -75,7 +85,9 @@ public class EconomyInventoryPlugin {
     @CommandInfo(startWith = "购买", desc = "购买 <道具> [数量]；购买称号 <名称>")
     public void buy(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
-            String[] parts = EconomyCommandSupport.arguments(event, "购买道具", "购买", "buy");
+            String purchaseArgument = EconomyCommandSupport.argument(event, "购买道具", "购买", "buy")
+                    .replaceFirst("\\s*[*×]\\s*(\\d+)$", " $1");
+            String[] parts = purchaseArgument.isBlank() ? new String[0] : purchaseArgument.split("\\s+");
             if (parts.length == 0) {
                 throw new EconomyException("ARGUMENT_REQUIRED", "请提供要购买的道具或称号");
             }
@@ -97,17 +109,21 @@ public class EconomyInventoryPlugin {
 
             EconomyItemDefinition item = itemService.resolve(parts[0]);
             int quantity = EconomyCommandSupport.quantity(parts.length > 1 ? parts[1] : null, 1);
-            itemService.buy(
+            EconomyItemService.PurchaseResult purchase = itemService.buy(
                     event.getUserId(),
                     EconomyCommandSupport.nickname(event),
                     item.getCode(),
                     quantity,
-                    EconomyCommandSupport.operationId("item-buy", event)
+                    EconomyCommandSupport.operationId("item-buy", event, item.getCode())
             );
-            return "购买成功: " + item.getName() + " x" + quantity
+            String message = "购买成功: " + item.getName() + " x" + quantity
                     + "，花费 " + EconomyMoney.format(
                     item.getPrice().multiply(java.math.BigDecimal.valueOf(quantity))
             );
+            if (purchase.bankTopUp().signum() > 0) {
+                message += "，主银行自动补足 " + EconomyMoney.format(purchase.bankTopUp());
+            }
+            return message;
         });
     }
 
@@ -127,7 +143,7 @@ public class EconomyInventoryPlugin {
                     EconomyCommandSupport.nickname(event),
                     item.getCode(),
                     quantity,
-                    EconomyCommandSupport.operationId("item-use", event)
+                    EconomyCommandSupport.operationId("item-use", event, item.getCode())
             );
         });
     }
@@ -204,6 +220,7 @@ public class EconomyInventoryPlugin {
             }
             return titles.get(index - 1).getTitleCode();
         } catch (NumberFormatException ignored) {
+            if (titleService.owned(userId).stream().anyMatch(t -> token.equals(t.getTitleCode()))) return token;
             return titleService.resolve(token).getCode();
         }
     }

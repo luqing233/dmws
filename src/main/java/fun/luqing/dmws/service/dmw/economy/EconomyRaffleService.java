@@ -38,6 +38,7 @@ public class EconomyRaffleService {
     private final EconomyRafflePrizeRepository prizeRepository;
     private final EconomyRaffleRecordRepository recordRepository;
     private final EconomyUserTitleRepository userTitleRepository;
+    private final EconomyConditionService conditions;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public DrawResult draw(
@@ -51,6 +52,7 @@ public class EconomyRaffleService {
         }
 
         EconomyUserProfile profile = profileService.getOrCreateForUpdate(userId, nickname);
+        conditions.requireAvailable(userId, nickname);
         LocalDateTime now = LocalDateTime.now(properties.zoneId());
         checkCooldown(profile, times, now);
 

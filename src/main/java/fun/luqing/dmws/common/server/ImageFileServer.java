@@ -24,8 +24,8 @@ public class ImageFileServer {
     private final int port;
 
     public ImageFileServer(String host, int port) throws IOException {
-        this.port = port;
         this.server = HttpServer.create(new InetSocketAddress(host, port), 0);
+        this.port = server.getAddress().getPort();
         this.server.createContext("/", this::handle);
         // 守护线程：即使 stop() 未被调用也不会阻塞 JVM 退出
         this.executor = Executors.newFixedThreadPool(2, runnable -> {

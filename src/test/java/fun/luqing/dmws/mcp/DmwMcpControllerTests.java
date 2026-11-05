@@ -18,6 +18,33 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DmwMcpControllerTests {
 
+    @Test
+    void expiredSessionRequestsReinitializeAndClosedSessionsAreRemoved() {
+        var config = new DmwConfig(); config.setMcpServerEnabled(true); config.setMcpServerToken("Bearer test");
+        var controller = new DmwMcpController(tools, config, new McpToolCatalog(), new EconomyMcpContext(config));
+        var ping = MAPPER.createObjectNode().put("method", "ping").put("id", 1);
+        assertEquals(404, controller.handle(ping,"Bearer test","old-session",new MockHttpServletResponse()).getStatusCode().value());
+        var response = new MockHttpServletResponse();
+        controller.handle(MAPPER.createObjectNode().put("method","initialize").put("id",2),"Bearer test",null,response);
+        String session = response.getHeader("mcp-session-id");
+        assertEquals(204, controller.closeSession("Bearer test",session).getStatusCode().value());
+        assertEquals(404, controller.handle(ping,"Bearer test",session,new MockHttpServletResponse()).getStatusCode().value());
+        assertEquals(405, controller.noEventStream().getStatusCode().value());
+    }
+
+    @Test
+    void sharedBearerAloneCannotAuthorizeEconomyWrites() {
+        DmwConfig config = new DmwConfig(); config.setMcpServerEnabled(true); config.setMcpServerToken("Bearer test");
+        var controller = new DmwMcpController(tools, config, new McpToolCatalog(), new EconomyMcpContext(config));
+        var init = MAPPER.createObjectNode().put("method", "initialize").put("id", 1);
+        var response = new MockHttpServletResponse(); controller.handle(init, "Bearer test", null, response);
+        var call = MAPPER.createObjectNode().put("method", "tools/call").put("id", 2);
+        call.putObject("params").put("name", "dmw_economy_buy").putObject("arguments").put("user_id", 3253912136L);
+        var result = controller.handle(call, "Bearer test", response.getHeader("mcp-session-id"), new MockHttpServletResponse());
+        assertTrue(String.valueOf(result.getBody()).contains("UNTRUSTED_CONTEXT"));
+        org.mockito.Mockito.verifyNoInteractions(tools);
+    }
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     @Mock
@@ -31,7 +58,7 @@ class DmwMcpControllerTests {
         when(dmwConfig.isMcpServerEnabled()).thenReturn(true);
         when(dmwConfig.getMcpServerToken()).thenReturn("Bearer test");
 
-        DmwMcpController controller = new DmwMcpController(tools, dmwConfig);
+        DmwMcpController controller = new DmwMcpController(tools, dmwConfig, new McpToolCatalog(), new EconomyMcpContext(new DmwConfig()));
         MockHttpServletResponse initResponse = new MockHttpServletResponse();
 
         ObjectNode initialize = MAPPER.createObjectNode();
@@ -59,5 +86,18 @@ class DmwMcpControllerTests {
         assertTrue(body.contains("does NOT call Fanqie"));
         assertTrue(body.contains("dmw_economy_transfer"));
         assertTrue(body.contains("dmw_economy_rob"));
+        assertTrue(body.contains("dmw_economy_buy"));
+        assertTrue(body.contains("dmw_economy_use_item"));
+        assertTrue(body.contains("dmw_economy_status"));
+        assertTrue(body.contains("dmw_economy_get_location"));
+        assertTrue(body.contains("dmw_economy_discharge"));
+        assertTrue(body.contains("dmw_economy_bail"));
+        assertTrue(body.contains("manual_usable"));
+        assertTrue(body.contains("as_bot"));
+        assertTrue(body.contains("dmw_economy_shop"));
+        assertTrue(body.contains("dmw_economy_balance"));
+        assertTrue(body.contains("dmw_economy_backpack"));
+        assertTrue(body.contains("dmw_get_update_job"));
+        assertTrue(body.contains("red-bull or 红牛"));
     }
 }

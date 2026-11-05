@@ -5,7 +5,6 @@ import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.entity.dmw.economy.EconomyTitleDefinition;
 import fun.luqing.dmws.entity.dmw.economy.EconomyUserProfile;
 import fun.luqing.dmws.entity.dmw.economy.EconomyUserTitle;
-import fun.luqing.dmws.enums.EconomyAccountScope;
 import fun.luqing.dmws.enums.EconomyLedgerReason;
 import fun.luqing.dmws.repository.dmw.economy.EconomyTitleDefinitionRepository;
 import fun.luqing.dmws.repository.dmw.economy.EconomyUserTitleRepository;
@@ -48,9 +47,8 @@ public class EconomyTitleService {
 
         operationService.start(operationId, "TITLE_PURCHASE", userId, "购买称号 " + titleCode);
         profileService.getOrCreateForUpdate(userId, nickname);
-        ledgerService.debitUser(
+        ledgerService.debitUserWithBankFallback(
                 userId,
-                EconomyAccountScope.WALLET,
                 EconomyMoney.positive(title.getPrice()),
                 operationId,
                 EconomyLedgerReason.TITLE_PURCHASE,

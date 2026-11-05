@@ -5,23 +5,16 @@ import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.config.EconomyProperties;
 import fun.luqing.dmws.entity.dmw.economy.EconomyPrivateBank;
 import fun.luqing.dmws.entity.dmw.economy.EconomyPrivateBankDeposit;
-import fun.luqing.dmws.entity.dmw.economy.EconomyPrivateBankLoan;
 import fun.luqing.dmws.enums.EconomyAccountScope;
 import fun.luqing.dmws.enums.EconomyLedgerReason;
-import fun.luqing.dmws.enums.EconomyLoanStatus;
 import fun.luqing.dmws.repository.dmw.economy.EconomyPrivateBankDepositRepository;
-import fun.luqing.dmws.repository.dmw.economy.EconomyPrivateBankLoanRepository;
 import fun.luqing.dmws.repository.dmw.economy.EconomyPrivateBankRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,7 +28,7 @@ public class EconomyPrivateBankService {
     private final EconomyLedgerService ledgerService;
     private final EconomyPrivateBankRepository bankRepository;
     private final EconomyPrivateBankDepositRepository depositRepository;
-    private final EconomyPrivateBankLoanRepository loanRepository;
+    private final EconomyPrivateBankLoanService loanService;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public BankView create(
@@ -202,45 +195,7 @@ public class EconomyPrivateBankService {
             int days,
             String operationId
     ) {
-        if (days < 1 || days > properties.getPrivateBankMaxLoanDays()) {
-            throw new EconomyException(
-                    "INVALID_LOAN_DAYS",
-                    "借款期限必须在 1 到 " + properties.getPrivateBankMaxLoanDays() + " 天之间"
-            );
-        }
-        EconomyPrivateBank bank = lockBank(codeOrName);
-        if (bank.getOwnerId().equals(userId)) {
-            throw new EconomyException("BANK_OWNER_BORROW", "不能向自己创建的银行借款");
-        }
-        operationService.start(operationId, "PRIVATE_BANK_LOAN", userId, "私人银行借款");
-        profileService.getOrCreateForUpdate(userId, nickname);
-        ledgerService.transferAccountToUser(
-                bank.getCapitalAccountKey(),
-                EconomyAccountScope.PLUGIN,
-                bank.getOwnerId(),
-                userId,
-                EconomyAccountScope.WALLET,
-                amount,
-                operationId,
-                EconomyLedgerReason.PRIVATE_BANK_LOAN,
-                userId,
-                "从私人银行 " + bank.getCode() + " 借款"
-        );
-
-        BigDecimal totalDue = EconomyMoney.positive(
-                amount.multiply(BigDecimal.ONE.add(properties.getPrivateBankLoanRate()))
-                        .setScale(2, RoundingMode.HALF_UP)
-        );
-        EconomyPrivateBankLoan loan = new EconomyPrivateBankLoan();
-        loan.setBankId(bank.getId());
-        loan.setBorrowerId(userId);
-        loan.setPrincipal(EconomyMoney.normalize(amount));
-        loan.setTotalDue(totalDue);
-        loan.setRemainingDue(totalDue);
-        loan.setStatus(EconomyLoanStatus.ACTIVE);
-        loan.setDueAt(LocalDateTime.now().plusDays(days));
-        loan = loanRepository.saveAndFlush(loan);
-        return view(loan, bank);
+        return loanService.borrow(userId, nickname, codeOrName, amount, days, operationId);
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
@@ -251,144 +206,17 @@ public class EconomyPrivateBankService {
             BigDecimal requestedAmount,
             String operationId
     ) {
-        EconomyPrivateBank bank = lockBank(codeOrName);
-        profileService.getOrCreateForUpdate(userId, nickname);
-        List<EconomyPrivateBankLoan> loans = loanRepository
-                .findByBorrowerIdAndStatusInOrderByDueAtAsc(
-                        userId,
-                        List.of(EconomyLoanStatus.ACTIVE, EconomyLoanStatus.OVERDUE)
-                )
-                .stream()
-                .filter(loan -> loan.getBankId().equals(bank.getId()))
-                .toList();
-        if (loans.isEmpty()) {
-            throw new EconomyException("LOAN_NOT_FOUND", "你在该银行没有待还贷款");
-        }
-
-        BigDecimal remaining = EconomyMoney.positive(requestedAmount);
-        BigDecimal repaid = EconomyMoney.zero();
-        for (EconomyPrivateBankLoan loan : loans) {
-            if (remaining.signum() <= 0) {
-                break;
-            }
-            BigDecimal payment = remaining.min(loan.getRemainingDue());
-            if (payment.signum() <= 0) {
-                continue;
-            }
-            String loanOperationId = operationId + ":" + loan.getId();
-            operationService.start(
-                    loanOperationId,
-                    "PRIVATE_BANK_REPAY",
-                    userId,
-                    "偿还私人银行贷款 " + loan.getId()
-            );
-            ledgerService.transferUserToAccount(
-                    userId,
-                    EconomyAccountScope.WALLET,
-                    bank.getCapitalAccountKey(),
-                    EconomyAccountScope.PLUGIN,
-                    bank.getOwnerId(),
-                    payment,
-                    loanOperationId,
-                    EconomyLedgerReason.PRIVATE_BANK_REPAY,
-                    userId,
-                    "偿还私人银行贷款 " + loan.getId()
-            );
-            settleLoan(loan, payment);
-            repaid = repaid.add(payment);
-            remaining = remaining.subtract(payment);
-        }
-        return new RepaymentView(bank.getCode(), repaid, remaining);
+        return loanService.repay(userId, nickname, codeOrName, requestedAmount, operationId);
     }
 
-    @Scheduled(
-            cron = "0 30 3 * * *",
-            zone = "${dmws.economy.time-zone:Asia/Shanghai}"
-    )
     @Transactional(transactionManager = "dmwTransactionManager")
     public void markOverdueLoans() {
-        List<EconomyPrivateBankLoan> dueLoans = loanRepository.findByStatusInAndDueAtBefore(
-                List.of(EconomyLoanStatus.ACTIVE),
-                LocalDateTime.now()
-        );
-        for (EconomyPrivateBankLoan loan : dueLoans) {
-            loan.setStatus(EconomyLoanStatus.OVERDUE);
-        }
+        loanService.markOverdueLoans();
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public void settleOverdueLoan(long loanId) {
-        EconomyPrivateBankLoan loan = loanRepository.findForUpdate(loanId).orElse(null);
-        if (loan == null
-                || loan.getStatus() == EconomyLoanStatus.REPAID
-                || loan.getDueAt().isAfter(LocalDateTime.now())) {
-            return;
-        }
-        EconomyPrivateBank bank = bankRepository.findById(loan.getBankId()).orElse(null);
-        if (bank == null) {
-            return;
-        }
-
-        String day = LocalDate.now().toString();
-        BigDecimal remaining = loan.getRemainingDue();
-        BigDecimal wallet = ledgerService.balance(
-                loan.getBorrowerId(),
-                EconomyAccountScope.WALLET
-        ).balance();
-        BigDecimal walletPayment = wallet.min(remaining);
-        if (walletPayment.signum() > 0) {
-            String operationId = "privatebank-overdue:" + loanId + ":" + day + ":wallet";
-            operationService.start(operationId, "PRIVATE_BANK_OVERDUE_WALLET", null, "贷款逾期扣款");
-            ledgerService.transferUserToAccount(
-                    loan.getBorrowerId(),
-                    EconomyAccountScope.WALLET,
-                    bank.getCapitalAccountKey(),
-                    EconomyAccountScope.PLUGIN,
-                    bank.getOwnerId(),
-                    walletPayment,
-                    operationId,
-                    EconomyLedgerReason.PRIVATE_BANK_REPAY,
-                    null,
-                    "逾期贷款自动扣款"
-            );
-            remaining = remaining.subtract(walletPayment);
-        }
-
-        if (remaining.signum() > 0) {
-            BigDecimal bankBalance = ledgerService.balance(
-                    loan.getBorrowerId(),
-                    EconomyAccountScope.MAIN_BANK
-            ).balance();
-            BigDecimal bankPayment = bankBalance.min(remaining);
-            if (bankPayment.signum() > 0) {
-                String operationId = "privatebank-overdue:" + loanId + ":" + day + ":bank";
-                operationService.start(operationId, "PRIVATE_BANK_OVERDUE_BANK", null, "贷款逾期扣主银行");
-                ledgerService.transferUserToAccount(
-                        loan.getBorrowerId(),
-                        EconomyAccountScope.MAIN_BANK,
-                        bank.getCapitalAccountKey(),
-                        EconomyAccountScope.PLUGIN,
-                        bank.getOwnerId(),
-                        bankPayment,
-                        operationId,
-                        EconomyLedgerReason.PRIVATE_BANK_REPAY,
-                        null,
-                        "逾期贷款自动扣主银行"
-                );
-                remaining = remaining.subtract(bankPayment);
-            }
-        }
-        settleLoan(loan, loan.getRemainingDue().subtract(remaining));
-    }
-
-    private void settleLoan(EconomyPrivateBankLoan loan, BigDecimal payment) {
-        loan.setRemainingDue(EconomyMoney.normalize(loan.getRemainingDue().subtract(payment)));
-        loan.setStatus(loan.getRemainingDue().signum() == 0
-                ? EconomyLoanStatus.REPAID
-                : loan.getDueAt().isBefore(LocalDateTime.now())
-                ? EconomyLoanStatus.OVERDUE
-                : EconomyLoanStatus.ACTIVE);
-        loanRepository.save(loan);
+        loanService.settleOverdueLoan(loanId);
     }
 
     private EconomyPrivateBank lockBank(String codeOrName) {
@@ -419,20 +247,6 @@ public class EconomyPrivateBankService {
                 bank.getOwnerId(),
                 bank.getDescription(),
                 ledgerService.accountBalance(bank.getCapitalAccountKey(), EconomyAccountScope.PLUGIN)
-        );
-    }
-
-    private LoanView view(EconomyPrivateBankLoan loan, EconomyPrivateBank bank) {
-        long remainingDays = Math.max(0, ChronoUnit.DAYS.between(LocalDateTime.now(), loan.getDueAt()));
-        return new LoanView(
-                loan.getId(),
-                bank.getCode(),
-                loan.getPrincipal(),
-                loan.getTotalDue(),
-                loan.getRemainingDue(),
-                loan.getStatus().name(),
-                loan.getDueAt(),
-                remainingDays
         );
     }
 

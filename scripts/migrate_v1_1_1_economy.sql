@@ -1,3 +1,8 @@
+-- HISTORICAL INITIAL IMPORT ONLY: DO NOT RERUN ON AN ACTIVE ECONOMY.
+-- This script overwrites profiles and inventories with the old snapshot.
+-- For the audited 2026-11-04 reconciliation use reconcile_legacy_economy.py.
+-- hy_economy tables may already have been retired into dmw.economy_history_*.
+
 -- DMWS economy migration, current for 1.1.1
 -- Source: server MySQL databases `economy` and `hy_economy`
 -- Target: primary `dmw` database
@@ -31,10 +36,12 @@ FROM economy.economy_balance_record src
 WHERE src.context = 'cn.chahuyun.HuYanEconomy'
   AND src.currency = 'hy-gold'
   AND src.uuid REGEXP '^u[0-9]+$'
-ON DUPLICATE KEY UPDATE
-    owner_id = VALUES(owner_id),
-    balance = VALUES(balance),
-    updated_at = NOW();
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dmw.economy_account target
+      WHERE target.account_key = src.uuid
+        AND target.scope = 'WALLET'
+  );
 
 -- Opening ledger entries. They are inserted only once.
 INSERT INTO dmw.economy_operation
@@ -68,10 +75,83 @@ FROM economy.economy_balance_record src
 WHERE src.context = 'cn.chahuyun.HuYanEconomy'
   AND src.currency = 'hy-gold'
   AND src.uuid REGEXP '^u[0-9]+$'
+  AND EXISTS (
+      SELECT 1
+      FROM dmw.economy_account target
+      WHERE target.account_key = src.uuid
+        AND target.scope = 'WALLET'
+        AND ABS(target.balance - GREATEST(ROUND(src.balance, 2), 0.00)) < 0.001
+  )
   AND NOT EXISTS (
       SELECT 1
       FROM dmw.economy_ledger_entry e
       WHERE e.operation_id = CONCAT('migration:v1.1.0:wallet:', src.uuid)
+  );
+
+-- Main bank balances from the historical global economy context.
+INSERT INTO dmw.economy_account
+    (account_key, scope, owner_id, balance, version, created_at, updated_at)
+SELECT
+    src.uuid,
+    'MAIN_BANK',
+    CAST(SUBSTRING(src.uuid, 2) AS UNSIGNED),
+    GREATEST(ROUND(src.balance, 2), 0.00),
+    0,
+    NOW(),
+    NOW()
+FROM economy.economy_balance_record src
+LEFT JOIN dmw.economy_account target
+    ON target.account_key = src.uuid
+   AND target.scope = 'MAIN_BANK'
+WHERE src.context = 'global-economy'
+  AND src.currency = 'hy-gold'
+  AND src.uuid REGEXP '^u[0-9]+$'
+  AND target.id IS NULL;
+
+-- Main bank opening ledger entries are inserted only once.
+INSERT INTO dmw.economy_operation
+    (operation_id, operation_type, actor_id, description, created_at)
+SELECT
+    CONCAT('migration:v1.1.1:bank:', src.uuid),
+    'MIGRATION_OPENING_BALANCE',
+    CAST(SUBSTRING(src.uuid, 2) AS UNSIGNED),
+    'Migrate HuYan main bank balance',
+    NOW()
+FROM economy.economy_balance_record src
+JOIN dmw.economy_account target
+    ON target.account_key = src.uuid
+   AND target.scope = 'MAIN_BANK'
+WHERE src.context = 'global-economy'
+  AND src.currency = 'hy-gold'
+  AND src.uuid REGEXP '^u[0-9]+$'
+  AND ABS(target.balance - GREATEST(ROUND(src.balance, 2), 0.00)) < 0.001
+ON DUPLICATE KEY UPDATE operation_id = operation_id;
+
+INSERT INTO dmw.economy_ledger_entry
+    (operation_id, account_key, scope, delta, balance_after, reason,
+     actor_id, description, created_at)
+SELECT
+    CONCAT('migration:v1.1.1:bank:', src.uuid),
+    src.uuid,
+    'MAIN_BANK',
+    GREATEST(ROUND(src.balance, 2), 0.00),
+    GREATEST(ROUND(src.balance, 2), 0.00),
+    'OPENING_BALANCE',
+    CAST(SUBSTRING(src.uuid, 2) AS UNSIGNED),
+    'Migrate HuYan main bank balance',
+    NOW()
+FROM economy.economy_balance_record src
+JOIN dmw.economy_account target
+    ON target.account_key = src.uuid
+   AND target.scope = 'MAIN_BANK'
+WHERE src.context = 'global-economy'
+  AND src.currency = 'hy-gold'
+  AND src.uuid REGEXP '^u[0-9]+$'
+  AND ABS(target.balance - GREATEST(ROUND(src.balance, 2), 0.00)) < 0.001
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dmw.economy_ledger_entry e
+      WHERE e.operation_id = CONCAT('migration:v1.1.1:bank:', src.uuid)
   );
 
 -- User profile, sign-in, active title, robbery cooldown and fishing rod.
@@ -306,6 +386,13 @@ SELECT
           AND currency = 'hy-gold'
           AND uuid REGEXP '^u[0-9]+$'
     )
+    + (
+        SELECT COUNT(*)
+        FROM economy.economy_balance_record
+        WHERE context = 'global-economy'
+          AND currency = 'hy-gold'
+          AND uuid REGEXP '^u[0-9]+$'
+    )
     + (SELECT COUNT(*) FROM hy_economy.userinfo)
     + (SELECT COUNT(*) FROM hy_economy.userbackpack)
     + (SELECT COUNT(*) FROM hy_economy.titleinfo)
@@ -329,4 +416,5 @@ UNION ALL SELECT 'economy_item_definition', COUNT(*) FROM dmw.economy_item_defin
 UNION ALL SELECT 'economy_user_item', COUNT(*) FROM dmw.economy_user_item
 UNION ALL SELECT 'economy_title_definition', COUNT(*) FROM dmw.economy_title_definition
 UNION ALL SELECT 'economy_user_title', COUNT(*) FROM dmw.economy_user_title
-UNION ALL SELECT 'economy_fishing_catch', COUNT(*) FROM dmw.economy_fishing_catch;
+UNION ALL SELECT 'economy_fishing_catch', COUNT(*) FROM dmw.economy_fishing_catch
+UNION ALL SELECT 'economy_main_bank', COUNT(*) FROM dmw.economy_account WHERE scope = 'MAIN_BANK';

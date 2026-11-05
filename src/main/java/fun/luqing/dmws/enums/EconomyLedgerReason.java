@@ -26,6 +26,8 @@ public enum EconomyLedgerReason {
     FISHING_ROD_UPGRADE,
     ROB_REWARD,
     ROB_FINE,
+    HOSPITAL_FEE,
+    BAIL_PAYMENT,
     FARM_SEED,
     FARM_HARVEST,
     ADMIN_ADJUST

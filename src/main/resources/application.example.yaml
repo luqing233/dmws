@@ -31,9 +31,6 @@ logging:
     root: WARN
 
 dmws:
-  ws-url: "ws://127.0.0.1:8080/ws"
-  http-url: "http://127.0.0.1:8080"
-  max-messages: 40
   bot-id: 0
   bot-name: "机器人名称"
   master: [0]
@@ -43,7 +40,8 @@ dmws:
   mcp-server-token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
   mcp:
     economy:
-      operator-id: 0
+      operator-id: 0 # deprecated; never used as an AI account
+      context-secret: "" # 32+ random characters, shared only with trusted AstrBot adapter
     downloader:
       url: "http://localhost:8001/mcp"
       token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -68,6 +66,29 @@ dmws:
     fishing-cooldown-seconds: 30
     rob-cooldown-seconds: 300
     rob-fine: 50
+    # 到期住院/监禁每15秒扫描；关闭后，状态查询与相关玩法仍会按需结算。
+    condition-scheduler-enabled: true
+    adventure:
+      # 分支依次判断；这是各分支的条件概率，不是总结果占比。
+      counter-chance: 0.30
+      police-chance: 0.25 # 另加 犯罪值*0.0025，最高0.75
+      success-chance: 0.35 # 道具增益另加0.20
+      poor-assault-chance: 0.45
+      min-steal-rate: 0.05
+      max-steal-rate: 0.35
+      max-stolen: 5000 # 不允许超过5000
+      crime-per-attempt: 5
+      crime-per-success: 5
+      crime-per-assault: 15
+      crime-per-arrest: 10
+      crime-decay-per-day: 5
+      bail-max-crime: 10
+      bail-base: 100
+      bail-per-crime: 20
+      diagnosis-per-injury: 10
+      light-hourly-fee: 30
+      medium-hourly-fee: 80
+      severe-hourly-fee: 150
 
 server:
   port: 8002

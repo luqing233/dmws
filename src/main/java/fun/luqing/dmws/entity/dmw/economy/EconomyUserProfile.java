@@ -26,6 +26,10 @@ public class EconomyUserProfile {
     @Column(name = "last_sign_date")
     private LocalDate lastSignDate;
 
+    /** Exclusive end date: valid for 30 local calendar days from activation. */
+    @Column(name = "monthly_sign_expires_on")
+    private LocalDate monthlySignExpiresOn;
+
     @Column(name = "sign_streak", nullable = false)
     private Integer signStreak = 0;
 

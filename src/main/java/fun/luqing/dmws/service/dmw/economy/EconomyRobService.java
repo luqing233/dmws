@@ -2,174 +2,128 @@ package fun.luqing.dmws.service.dmw.economy;
 
 import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.common.economy.EconomyMoney;
+import fun.luqing.dmws.config.EconomyAdventureProperties;
 import fun.luqing.dmws.config.EconomyProperties;
 import fun.luqing.dmws.entity.dmw.economy.EconomyRobRecord;
-import fun.luqing.dmws.entity.dmw.economy.EconomyUserProfile;
 import fun.luqing.dmws.enums.EconomyAccountScope;
 import fun.luqing.dmws.enums.EconomyLedgerReason;
 import fun.luqing.dmws.repository.dmw.economy.EconomyRobRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
 public class EconomyRobService {
-
-    private static final BigDecimal POOR_THRESHOLD = new BigDecimal("50.00");
-
     private final EconomyProperties properties;
+    private final EconomyAdventureProperties rules;
     private final EconomyOperationService operationService;
     private final EconomyUserProfileService profileService;
     private final EconomyLedgerService ledgerService;
     private final EconomyRobRecordRepository recordRepository;
+    private final EconomyConditionService conditions;
+    private final EconomyGameTime time;
+    private final EconomyRobRandom random;
+    private final EconomyEquipmentService equipment;
 
     @Transactional(transactionManager = "dmwTransactionManager")
-    public RobResult rob(
-            long robberId,
-            String robberNickname,
-            long targetId,
-            String operationId
-    ) {
-        if (robberId == targetId) {
-            throw new EconomyException("ROB_SELF", "不能抢劫自己");
-        }
-        EconomyUserProfile profile = profileService.getOrCreateForUpdate(robberId, robberNickname);
-        LocalDateTime now = LocalDateTime.now(properties.zoneId());
-        if (profile.getLastRobAt() != null) {
-            long elapsed = Duration.between(profile.getLastRobAt(), now).toSeconds();
-            if (elapsed < properties.getRobCooldownSeconds()) {
-                long remaining = properties.getRobCooldownSeconds() - Math.max(0, elapsed);
-                throw new EconomyException(
-                        "ROB_COOLDOWN",
-                        "先喘口气吧，距离下次行动还有 " + formatCooldown(remaining) + "。"
-                );
-            }
-        }
-
+    public RobResult rob(long robberId, String robberNickname, long targetId, String operationId) {
+        if (robberId <= 0 || targetId <= 0) throw new EconomyException("INVALID_USER", "玩家 ID 必须为正整数");
+        if (robberId == targetId) throw new EconomyException("ROB_SELF", "不能抢劫自己");
         operationService.start(operationId, "ROB", robberId, "抢劫用户 " + targetId);
+        var pair = conditions.lockPair(robberId, robberNickname, targetId, "");
+        var robber = pair.get(0);
+        var target = pair.get(1);
+        conditions.requireAvailable(robber);
+        conditions.requireAvailable(target);
+        var profile = profileService.getOrCreateForUpdate(robberId, robberNickname);
+        LocalDateTime now = time.now();
+        if (profile.getLastRobAt() != null) {
+            long remaining = properties.getRobCooldownSeconds() - Math.max(0, Duration.between(profile.getLastRobAt(), now).toSeconds());
+            if (remaining > 0) throw new EconomyException("ROB_COOLDOWN", "先喘口气吧，距离下次行动还有 " + remaining + " 秒。");
+        }
         profile.setLastRobAt(now);
-        BigDecimal targetBalance = ledgerService.balance(targetId, EconomyAccountScope.WALLET).balance();
+        conditions.addCrime(robber, rules.getCrimePerAttempt());
+        BigDecimal targetBefore = ledgerService.balance(targetId, EconomyAccountScope.WALLET).balance();
+        boolean poor = targetBefore.signum() <= 0;
+        Integer batonEnergy = poor ? null : equipment.useForRobbery(robberId);
+        boolean batonUsed = batonEnergy != null;
+        boolean legacyBoost = !poor && !batonUsed && profile.getRobBoostCharges() > 0;
+        boolean boosted = batonUsed || legacyBoost;
+        if (legacyBoost) profile.setRobBoostCharges(profile.getRobBoostCharges() - 1);
+        boolean success = false, caught = false, resisted = false, assaulted = false;
+        long injuredUser = 0;
+        int injury = 0;
+        LocalDateTime hospitalUntil = null;
+        BigDecimal stolen = EconomyMoney.zero(), fine = EconomyMoney.zero();
+        double policeChance = Math.min(0.75, rules.getPoliceChance() + robber.getCrime() * 0.0025);
 
-        if (targetBalance.compareTo(POOR_THRESHOLD) < 0) {
-            boolean angry = ThreadLocalRandom.current().nextDouble() < 0.45;
-            EconomyRobRecord poorRecord = new EconomyRobRecord();
-            poorRecord.setRobberId(robberId);
-            poorRecord.setTargetId(targetId);
-            poorRecord.setSuccess(false);
-            poorRecord.setAmount(EconomyMoney.zero());
-            recordRepository.save(poorRecord);
-            return new RobResult(
-                    false,
-                    true,
-                    false,
-                    angry,
-                    false,
-                    targetId,
-                    EconomyMoney.zero(),
-                    EconomyMoney.zero(),
-                    targetBalance,
-                    ledgerService.balance(robberId, EconomyAccountScope.WALLET).balance()
-            );
-        }
-
-        boolean robBoostUsed = profile.getRobBoostCharges() > 0;
-        if (robBoostUsed) {
-            profile.setRobBoostCharges(profile.getRobBoostCharges() - 1);
-        }
-        double successChance = Math.min(0.75, 0.35 + (robBoostUsed ? 0.20 : 0.0));
-        boolean success = ThreadLocalRandom.current().nextDouble() < successChance;
-        BigDecimal amount = EconomyMoney.zero();
-        BigDecimal targetAfter = targetBalance;
-        boolean caught = false;
-        boolean resisted = false;
-
-        if (success) {
-            BigDecimal rate = BigDecimal.valueOf(
-                    ThreadLocalRandom.current().nextDouble(0.05, 0.350001)
-            );
-            amount = EconomyMoney.normalize(
-                    targetBalance.multiply(rate).setScale(2, RoundingMode.DOWN)
-            );
-            if (amount.signum() > 0) {
-                ledgerService.transferUser(
-                        targetId,
-                        EconomyAccountScope.WALLET,
-                        robberId,
-                        EconomyAccountScope.WALLET,
-                        amount,
-                        operationId,
-                        EconomyLedgerReason.ROB_REWARD,
-                        robberId,
-                        "被用户 " + robberId + " 抢劫"
-                );
-                targetAfter = EconomyMoney.normalize(targetBalance.subtract(amount));
+        if (poor) {
+            assaulted = random.chance(rules.getPoorAssaultChance());
+            if (assaulted) {
+                injury = random.injury();
+                conditions.admit(target, injury);
+                conditions.addCrime(robber, rules.getCrimePerAssault());
+                injuredUser = targetId;
+                hospitalUntil = target.getHospitalUntil();
             }
-            resisted = ThreadLocalRandom.current().nextDouble() < 0.30;
-        } else {
-            caught = ThreadLocalRandom.current().nextDouble() < 0.25;
-            if (caught) {
-                amount = ledgerService.debitUpTo(
-                        robberId,
-                        EconomyAccountScope.WALLET,
-                        EconomyMoney.positive(properties.getRobFine()),
-                        operationId,
-                        EconomyLedgerReason.ROB_FINE,
-                        robberId,
-                        "抢劫失败罚款"
-                );
+            caught = random.chance(Math.min(0.75, rules.getPoliceChance() + robber.getCrime() * 0.0025));
+        } else if (random.chance(rules.getCounterChance())) {
+            resisted = true;
+            injury = random.injury();
+            conditions.admit(robber, injury);
+            injuredUser = robberId;
+            hospitalUntil = robber.getHospitalUntil();
+        } else if (random.chance(policeChance)) {
+            caught = true;
+        } else if (random.chance(Math.min(1, rules.getSuccessChance() + (boosted ? 0.20 : 0)))) {
+            BigDecimal rate = rules.getMinStealRate().add(rules.getMaxStealRate().subtract(rules.getMinStealRate())
+                    .multiply(BigDecimal.valueOf(random.fraction())));
+            stolen = targetBefore.multiply(rate).min(rules.getMaxStolen()).min(new BigDecimal("5000"))
+                    .min(targetBefore).setScale(2, RoundingMode.DOWN);
+            if (stolen.signum() > 0) {
+                ledgerService.transferUser(targetId, EconomyAccountScope.WALLET, robberId, EconomyAccountScope.WALLET,
+                        stolen, operationId, EconomyLedgerReason.ROB_REWARD, robberId, "抢劫用户 " + targetId);
+                success = true;
+                conditions.addCrime(robber, rules.getCrimePerSuccess());
             }
         }
-
-        EconomyRobRecord record = new EconomyRobRecord();
+        if (caught) {
+            conditions.addCrime(robber, rules.getCrimePerArrest());
+            conditions.incarcerate(robber);
+            fine = ledgerService.debitUpTo(robberId, EconomyAccountScope.WALLET,
+                    EconomyMoney.positive(properties.getRobFine()), operationId, EconomyLedgerReason.ROB_FINE,
+                    robberId, "抢劫被捕罚款");
+        }
+        var record = new EconomyRobRecord();
         record.setRobberId(robberId);
         record.setTargetId(targetId);
         record.setSuccess(success);
-        record.setAmount(amount);
+        record.setAmount(success ? stolen : fine);
+        record.setOutcome(assaulted ? (caught ? "ASSAULT_ARRESTED" : "ASSAULT") : caught ? "ARRESTED"
+                : resisted ? "COUNTERED" : success ? "STOLEN" : poor ? "EMPTY" : "ESCAPED");
+        record.setInjury(injury);
+        record.setInjuredUserId(injuredUser == 0 ? null : injuredUser);
+        record.setCrimeAfter(robber.getCrime());
+        record.setOperationId(operationId);
         recordRepository.save(record);
-
-        return new RobResult(
-                success,
-                false,
-                caught,
-                resisted,
-                robBoostUsed,
-                targetId,
-                success ? amount : EconomyMoney.zero(),
-                success ? EconomyMoney.zero() : amount,
-                targetAfter,
-                ledgerService.balance(robberId, EconomyAccountScope.WALLET).balance()
-        );
+        return new RobResult(success, poor, caught, resisted, boosted, targetId, stolen, fine,
+                ledgerService.balance(targetId, EconomyAccountScope.WALLET).balance(),
+                ledgerService.balance(robberId, EconomyAccountScope.WALLET).balance(), assaulted, injuredUser,
+                injury, hospitalUntil, robber.getJailUntil(), robber.getCrime(), batonUsed, batonEnergy);
     }
 
-    public record RobResult(
-            boolean success,
-            boolean poorTarget,
-            boolean caught,
-            boolean resisted,
-            boolean robBoostUsed,
-            long targetId,
-            BigDecimal stolen,
-            BigDecimal fine,
-            BigDecimal targetBalanceAfter,
-            BigDecimal walletBalance
-    ) {
+    public String describe(RobResult result, String targetName) {
+        return EconomyRobNarrative.format(result, targetName, time.now());
     }
 
-    private String formatCooldown(long seconds) {
-        long minutes = seconds / 60;
-        long remainingSeconds = seconds % 60;
-        if (minutes <= 0) {
-            return remainingSeconds + " 秒";
-        }
-        return remainingSeconds == 0
-                ? minutes + " 分钟"
-                : minutes + " 分 " + remainingSeconds + " 秒";
-    }
+    public record RobResult(boolean success, boolean poorTarget, boolean caught, boolean resisted, boolean robBoostUsed,
+                            long targetId, BigDecimal stolen, BigDecimal fine, BigDecimal targetBalanceAfter,
+                            BigDecimal walletBalance, boolean victimAssaulted, long injuredUserId, int injury,
+                            LocalDateTime hospitalUntil, LocalDateTime jailUntil, int crime,
+                            boolean electricBatonUsed, Integer electricBatonEnergy) { }
 }

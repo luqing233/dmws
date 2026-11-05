@@ -9,9 +9,9 @@ import fun.luqing.dmws.client.TomatoContentRecord;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookContent;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookContentService;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
-import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookContentService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookListService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoSubscriptionGroupService;
 import fun.luqing.dmws.client.TomatoApiClient;
 import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.config.ConfigManager;
@@ -42,12 +42,12 @@ public class ChapterContentCommand {
     private final ConfigManager configManager;
     private final TomatoBookListService bookListService;
     private final TomatoSubscriptionGroupService subscriptionService;
-    private final TomatoApiClient tomatoApiClient;
+    private final fun.luqing.dmws.service.dmw.tomato.TomatoReadingService readingService;
 
     @GroupMessageHandler
     @MessageHandlerFilter(startWith = "获取章节内容")
     @Async("taskExecutor")
-    @CommandInfo(startWith = "获取章节内容", desc = "根据订阅ID和章节序号获取章节内容")
+    @CommandInfo(startWith = "获取章节内容", desc = "获取章节内容 <订阅ID> <章节序号> [下载]，默认仅本地读取")
     public void getChapterContent(Bot bot, GroupMessageEvent event) {
         long groupId = event.getGroupId();
         String[] params = event.getMessage().replace("获取章节内容", "").trim().split("\\s+");
@@ -81,47 +81,45 @@ public class ChapterContentCommand {
         }
 
         List<TomatoBookContent> chapters = contentService.findAllByBookIdOrderByRealChapterOrderAsc(bookId);
-        if (chapterIndex < 1 || chapterIndex > chapters.size()) {
-            TomatoMessageUtil.sendGroupMessage(bot, groupId, "章节序号超出范围。");
+        TomatoBookContent chapter = chapters.stream().filter(c -> c.getRealChapterOrder() != null
+                && c.getRealChapterOrder() == chapterIndex).findFirst().orElse(null);
+        if (chapter == null) {
+            TomatoMessageUtil.sendGroupMessage(bot, groupId, "本地目录未找到该章节序号，请先更新目录。");
             return;
         }
 
-        TomatoBookContent chapter = chapters.get(chapterIndex - 1);
-
-        if (chapter.getContent() == null) {
-            TomatoContentRecord record = tomatoApiClient.getChapterContent(
-                    chapter.getBookId(), chapter.getChapterId(), chapter.getRealChapterOrder());
-            if (record != null) {
-                chapter.setContent(record.content());
-                chapter.setWordCount(record.wordCount());
-                contentService.saveOrUpdate(chapter);
-            } else {
-                TomatoMessageUtil.sendGroupMessage(bot, groupId, "无法获取章节内容，请稍后再试。");
-                return;
+        boolean download = params.length == 3 && ("下载".equals(params[2]) || "下载缺失".equals(params[2]));
+        if (params.length > 3 || (params.length == 3 && !download)) {
+            TomatoMessageUtil.sendGroupMessage(bot, groupId, "格式：获取章节内容 <订阅ID> <章节序号> [下载]");
+            return;
+        }
+        try {
+            var result = readingService.read(bookId, List.of(chapter.getChapterId()), download, 0, 45000);
+            fun.luqing.dmws.service.dmw.tomato.TomatoForwardFormatter.attach(result, book.getBookName());
+            var nodes = result.path("forward_nodes");
+            if (!nodes.isEmpty()) {
+                List<Map<String,Object>> messages = new ArrayList<>();
+                for (var node : nodes) {
+                    messages.add(Map.of("type","node","data",Map.of("uin",String.valueOf(bot.getSelfId()),
+                            "name",configManager.getDmwConfig().getBotName(),"content",List.of(Map.of(
+                            "type","text","data",Map.of("text",node.asText()))))));
+                }
+                var response = bot.sendGroupForwardMsg(groupId, messages);
+                if (response == null || !Integer.valueOf(0).equals(response.getRetCode()) || response.getData() == null) {
+                    TomatoMessageUtil.sendGroupMessage(bot,groupId,"正文转发未获成功确认，不会自动重发，请稍后查询。");
+                    return;
+                }
             }
+            if (!result.path("complete").asBoolean() || result.path("forward_truncated").asBoolean()) {
+                String message = result.path("display_text").asText();
+                if (result.hasNonNull("batch_id")) message += "\n下载批次：" + result.path("batch_id").asText() + "，请按此批次查询；完成后重新获取本章。";
+                if (!download && !result.path("missing_item_ids").isEmpty()) message += "\n如需下载，请发送：获取章节内容 " + subId + " " + chapterIndex + " 下载";
+                if (result.path("forward_truncated").asBoolean()) message += "\n合并转发已截断，请分段读取。";
+                TomatoMessageUtil.sendGroupMessage(bot,groupId,message);
+            }
+        } catch (RuntimeException e) {
+            log.warn("正文获取失败，bookId={}, chapterId={}",bookId,chapter.getChapterId(),e);
+            TomatoMessageUtil.sendGroupMessage(bot,groupId,"获取正文未获确认，请稍后查询；不能认定下载或转发已经成功。");
         }
-
-        Document doc = Jsoup.parse(chapter.getContent());
-        Elements h1s = doc.select("h1");
-        String header = chapter.getTitle();
-        if (!h1s.isEmpty()) header = h1s.first().text();
-        Elements paragraphs = doc.select("article p");
-        if (paragraphs.isEmpty()) paragraphs = doc.select("body > p");
-
-        List<String> messageList = new ArrayList<>();
-        messageList.add("《" + book.getBookName() + "》");
-        messageList.add(header);
-        messageList.add("共 " + chapter.getWordCount() + " 字");
-        for (Element p : paragraphs) {
-            String text = p.text();
-            if (!text.isEmpty()) messageList.add(text);
-        }
-
-        List<Map<String, Object>> forwardMsg = generateForwardMsg(
-                configManager.getDmwConfig().getBotId(),
-                configManager.getDmwConfig().getBotName(),
-                messageList
-        );
-        bot.sendGroupForwardMsg(groupId, forwardMsg);
     }
 }

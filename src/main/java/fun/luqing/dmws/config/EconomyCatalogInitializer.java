@@ -52,17 +52,21 @@ public class EconomyCatalogInitializer implements ApplicationRunner {
                 new BigDecimal("188"), EconomyItemEffectType.SIGN_BONUS, new BigDecimal("3"), null);
         saveItem("sign-in-card", "补签卡", "使用后恢复最近一次断签的连续天数。",
                 new BigDecimal("123"), EconomyItemEffectType.SIGN_STREAK_RESTORE, BigDecimal.ZERO, null);
-        saveItem("sign-monthly-card", "签到月卡", "下一次签到时自动消耗，本次签到奖励五倍。",
+        saveItem("sign-monthly-card", "签到月卡", "首次签到自动激活，连续30个自然日签到五倍；最后5天签到提醒，到期后再启用下一张。",
                 new BigDecimal("9999"), EconomyItemEffectType.SIGN_BONUS, new BigDecimal("5"), null);
-        saveItem("electric-baton", "便携电棍", "使用后下一次抢劫成功率提高 20%。",
-                new BigDecimal("1888"), EconomyItemEffectType.ROB_BOOST, BigDecimal.ONE, null);
-        saveItem("red-bull", "红牛", "使用后下一次抢劫成功率提高 20%。",
+        saveItem("electric-baton", "便携电棍", "可重复使用，满电100；抢劫时自动耗电20，最终成功判定增加20个百分点，不与红牛叠加。充电中够20电就自动停止充电并使用，不足则继续充电。",
+                new BigDecimal("1888"), EconomyItemEffectType.ELECTRIC_BATON, BigDecimal.ONE, null);
+        saveItem("electric-baton-charger", "电棍充电器", "可重复使用，与电棍同价；使用后为电量最低的一根充电，每分钟恢复1电，空电100分钟充满。抢劫时够20电即拔电使用，不足继续充电；每人同时充一根，离线继续计时。",
+                new BigDecimal("1888"), EconomyItemEffectType.BATON_CHARGER, BigDecimal.ONE, null);
+        saveItem("golden-basin", "金盆", "金盆洗手：一次清零全部犯罪值，每次一个，每个自然日最多使用2个；不缩短服刑或住院时间，犯罪值为0不消耗。",
+                new BigDecimal("1288"), EconomyItemEffectType.CRIME_REDUCTION, new BigDecimal("100"), null);
+        saveItem("red-bull", "红牛", "增加一次抢劫增益：最终成功判定增加20个百分点；次数累积但不叠加概率，反打/被捕也消耗。",
                 new BigDecimal("888"), EconomyItemEffectType.ROB_BOOST, BigDecimal.ONE, null);
         saveItem("health-card", "医保卡", "来自壶言经济的纪念收藏品，当前版本无额外效果。",
                 new BigDecimal("5888"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);
         saveItem("rename-card", "改名卡", "来自壶言经济的纪念收藏品，当前版本无额外效果。",
                 new BigDecimal("2333"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);
-        saveItem("fishing-luck-bait", "幸运鱼饵", "使用后下一次钓鱼成功率提高 20%。",
+        saveItem("fishing-luck-bait", "幸运鱼饵", "增加一次钓鱼增益：成功率增加20个百分点；次数累积但不叠加概率。",
                 new BigDecimal("300"), EconomyItemEffectType.FISHING_LUCK, BigDecimal.ONE, null);
         saveItem("star-token", "星愿币", "抽奖常见奖品，可用于装饰背包。",
                 new BigDecimal("50"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);

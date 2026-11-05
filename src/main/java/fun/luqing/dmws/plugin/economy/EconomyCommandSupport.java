@@ -9,6 +9,7 @@ import com.mikuac.shiro.dto.event.message.GroupMessageEvent;
 import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.config.DmwConfig;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -62,7 +63,11 @@ public final class EconomyCommandSupport {
                     config.getBotName(),
                     nodes
             );
-            bot.sendGroupForwardMsg(event.getGroupId(), forward);
+            var response = bot.sendGroupForwardMsg(event.getGroupId(), forward);
+            if (response == null || !Integer.valueOf(0).equals(response.getRetCode())
+                    || response.getData() == null) {
+                reply(bot, event, String.join("\n\n", nodes));
+            }
         } catch (RuntimeException exception) {
             log.warn("合并转发发送失败，降级为普通消息: group={}", event.getGroupId(), exception);
             reply(bot, event, String.join("\n\n", nodes));
@@ -133,28 +138,20 @@ public final class EconomyCommandSupport {
     }
 
     public static String nickname(GroupMessageEvent event) {
-        if (event.getSender() == null) {
-            return String.valueOf(event.getUserId());
-        }
-        String nickname = event.getSender().getNickname();
-        return nickname == null || nickname.isBlank()
-                ? String.valueOf(event.getUserId())
-                : nickname;
+        String name = event.getSender() == null ? "" : EconomyPlayerNameService.visible(
+                event.getSender().getCard(), event.getSender().getNickname(), event.getUserId());
+        return name.isBlank() ? "这位玩家" : name;
     }
 
     public static String groupMemberDisplayName(Bot bot, long groupId, long userId) {
         try {
             GroupMemberInfoResp member = bot.getGroupMemberInfo(groupId, userId, false).getData();
             if (member != null) {
-                if (member.getCard() != null && !member.getCard().isBlank()) {
-                    return member.getCard().trim();
-                }
-                if (member.getNickname() != null && !member.getNickname().isBlank()) {
-                    return member.getNickname().trim();
-                }
+                String name = EconomyPlayerNameService.visible(member.getCard(), member.getNickname(), userId);
+                if (!name.isBlank()) return name;
             }
         } catch (RuntimeException ignored) {
-            // Fall back to the numeric user id when the OneBot implementation cannot resolve a card.
+            // Human replies use a neutral label when QQ cannot resolve a name.
         }
         return "对方";
     }
@@ -169,7 +166,12 @@ public final class EconomyCommandSupport {
     }
 
     public static String operationId(String action, GroupMessageEvent event) {
-        return action + ":" + event.getMessageId();
+        return operationId(action, event, "");
+    }
+
+    public static String operationId(String action, GroupMessageEvent event, String detail) {
+        return fun.luqing.dmws.common.economy.EconomyMessageOperation.id(action, event.getGroupId(),
+                event.getMessageId(), event.getUserId(), detail);
     }
 
     public static boolean isExact(String text, String... commands) {

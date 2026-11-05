@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -28,13 +29,14 @@ public class EconomySignService {
     private final EconomyUserProfileService profileService;
     private final EconomyItemService itemService;
     private final EconomyLedgerService ledgerService;
+    private final EconomyGameTime gameTime;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public SignResult sign(long userId, String nickname, String operationId) {
         operationService.start(operationId, "SIGN", userId, "每日签到");
 
         EconomyUserProfile profile = profileService.getOrCreateForUpdate(userId, nickname);
-        LocalDate today = LocalDate.now(properties.zoneId());
+        LocalDate today = gameTime.today();
         if (today.equals(profile.getLastSignDate())) {
             throw new EconomyException("ALREADY_SIGNED", "今天已经签到过了");
         }
@@ -57,9 +59,18 @@ public class EconomySignService {
         BigDecimal base = randomReward();
         BigDecimal multiplier = BigDecimal.ONE;
         String bonusText = "";
-        if (itemService.consumeOneIfPresent(userId, MONTHLY_CARD)) {
+        LocalDate expires = profile.getMonthlySignExpiresOn();
+        boolean active = expires != null && today.isBefore(expires);
+        if (!active && itemService.consumeOneIfPresent(userId, MONTHLY_CARD)) {
+            expires = today.plusDays(30);
+            profile.setMonthlySignExpiresOn(expires);
+            active = true;
+        }
+        if (active) {
             multiplier = new BigDecimal("5");
-            bonusText = "，消耗签到月卡";
+            long days = ChronoUnit.DAYS.between(today, expires);
+            bonusText = "，签到月卡五倍奖励（有效至 " + expires.minusDays(1) + "）";
+            if (days <= 5) bonusText += "\n提醒：签到月卡快过期了，含今天还剩 " + days + " 天";
         } else if (itemService.consumeOneIfPresent(userId, TRIPLE_CARD)) {
             multiplier = new BigDecimal("3");
             bonusText = "，消耗三倍签到卡";

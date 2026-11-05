@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -37,6 +38,50 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ActiveProfiles("test")
 @Transactional(transactionManager = "dmwTransactionManager")
 class EconomyServiceIntegrationTests {
+
+    @Autowired
+    private fun.luqing.dmws.repository.dmw.economy.EconomyPrivateBankLoanRepository loanRepository;
+
+    @Test
+    void overdueLoanCollectsWalletThenMainBankWithoutDoubleCharge() {
+        long owner = 95101L;
+        long borrower = 95102L;
+        adminService.adjust(owner, owner, "owner", new BigDecimal("150000"), true, "overdue-owner");
+        bankingService.deposit(owner, "owner", new BigDecimal("150000"), "overdue-owner-bank");
+        privateBankService.create(owner, "owner", "overduetest", "逾期测试银行", "overdue-create");
+        var loan = privateBankService.borrow(borrower, "borrower", "overduetest",
+                new BigDecimal("500"), 1, "overdue-borrow");
+        adminService.adjust(borrower, borrower, "borrower", new BigDecimal("50"), true, "overdue-extra");
+        bankingService.deposit(borrower, "borrower", new BigDecimal("300"), "overdue-deposit");
+        var entity = loanRepository.findById(loan.id()).orElseThrow();
+        entity.setDueAt(java.time.LocalDateTime.now().minusDays(1));
+        privateBankService.markOverdueLoans();
+        assertEquals(fun.luqing.dmws.enums.EconomyLoanStatus.OVERDUE, entity.getStatus());
+        privateBankService.settleOverdueLoan(loan.id());
+        assertEquals(fun.luqing.dmws.enums.EconomyLoanStatus.REPAID, entity.getStatus());
+        assertEquals(new BigDecimal("0.00"), entity.getRemainingDue());
+        assertEquals(new BigDecimal("0.00"), bankingService.balances(borrower).wallet());
+        assertEquals(new BigDecimal("0.00"), bankingService.balances(borrower).bank());
+        assertEquals(new BigDecimal("100050.00"), privateBankService.info("overduetest").capital());
+        privateBankService.settleOverdueLoan(loan.id());
+        assertEquals(new BigDecimal("100050.00"), privateBankService.info("overduetest").capital());
+    }
+
+    @Test
+    void extractedLedgerRollsBackBalancesAndEntriesTogether() {
+        long sender = 95201L;
+        long receiver = 95202L;
+        adminService.adjust(sender, sender, "sender", new BigDecimal("100"), true, "rollback-seed");
+        bankingService.transfer(sender, "sender", receiver, new BigDecimal("40"), "rollback-transfer");
+        assertEquals(new BigDecimal("40.00"), ledgerService.balance(receiver, EconomyAccountScope.WALLET).balance());
+        org.springframework.test.context.transaction.TestTransaction.flagForRollback();
+        org.springframework.test.context.transaction.TestTransaction.end();
+        org.springframework.test.context.transaction.TestTransaction.start();
+        assertEquals(new BigDecimal("0.00"), ledgerService.balance(sender, EconomyAccountScope.WALLET).balance());
+        assertEquals(new BigDecimal("0.00"), ledgerService.balance(receiver, EconomyAccountScope.WALLET).balance());
+        assertTrue(ledgerService.recentEntries(sender, EconomyAccountScope.WALLET, 100).isEmpty());
+        assertTrue(ledgerService.recentEntries(receiver, EconomyAccountScope.WALLET, 100).isEmpty());
+    }
 
     @Autowired
     private EconomyAdminService adminService;
@@ -52,6 +97,9 @@ class EconomyServiceIntegrationTests {
 
     @Autowired
     private EconomyItemService itemService;
+
+    @Autowired
+    private fun.luqing.dmws.service.dmw.economy.EconomyOperationService operationService;
 
     @Autowired
     private EconomyTitleService titleService;
@@ -273,6 +321,68 @@ class EconomyServiceIntegrationTests {
     }
 
     @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void duplicateItemUseAfterLastItemIsConsumedDoesNotApplyEffectAgain() {
+        long userId = 96601L;
+        adminService.adjust(userId, userId, "mcp-user", new BigDecimal("2000"), true, "use-last-seed");
+        itemService.buy(userId, "mcp-user", "red-bull", 1, "use-last-buy");
+        itemService.use(userId, "mcp-user", "red-bull", 1, "mcp:use:last-item");
+        assertThrows(DuplicateEconomyOperationException.class,
+                () -> itemService.use(userId, "mcp-user", "red-bull", 1, "mcp:use:last-item"));
+        assertTrue(itemService.backpack(userId).isEmpty());
+        assertEquals(1, profileService.get(userId).getRobBoostCharges());
+        assertTrue(operationService.isProcessed("mcp:use:last-item"));
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void failedItemEffectRollsBackInventoryAndOperationAllowingCorrectedRetry() {
+        long userId = 96602L;
+        adminService.adjust(userId, userId, "mcp-user", new BigDecimal("10000"), true, "use-rollback-seed");
+        itemService.buy(userId, "mcp-user", "star-title-card", 2, "use-rollback-buy");
+        BigDecimal walletBefore = bankingService.balances(userId).wallet();
+        EconomyException exception = assertThrows(EconomyException.class,
+                () -> itemService.use(userId, "mcp-user", "star-title-card", 2, "mcp:use:rollback-effect"));
+        assertEquals("INVALID_QUANTITY", exception.getCode());
+        assertEquals(2, itemService.backpack(userId).getFirst().getQuantity());
+        assertTrue(titleService.owned(userId).isEmpty());
+        assertTrue(!operationService.isProcessed("mcp:use:rollback-effect"));
+        itemService.use(userId, "mcp-user", "star-title-card", 1, "mcp:use:rollback-effect");
+        assertEquals(1, itemService.backpack(userId).getFirst().getQuantity());
+        assertTrue(titleService.owned(userId).stream().anyMatch(title -> title.getTitleCode().equals("star-traveler")));
+        assertEquals(walletBefore, bankingService.balances(userId).wallet());
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    void concurrentItemUseWithSameRequestConsumesOnlyOnce() throws Exception {
+        long userId = 96603L;
+        adminService.adjust(userId, userId, "mcp-bot", new BigDecimal("2000"), true, "use-race-seed");
+        itemService.buy(userId, "mcp-bot", "red-bull", 2, "use-race-buy");
+        var start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<String> use = () -> {
+            start.await();
+            try {
+                itemService.use(userId, "mcp-bot", "red-bull", 1, "mcp:use:race");
+                return "OK";
+            } catch (DuplicateEconomyOperationException duplicate) {
+                return duplicate.getCode();
+            }
+        };
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(use);
+            var second = executor.submit(use);
+            start.countDown();
+            var results = java.util.List.of(first.get(15, java.util.concurrent.TimeUnit.SECONDS),
+                    second.get(15, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(1, results.stream().filter("OK"::equals).count());
+            assertEquals(1, results.stream().filter("DUPLICATE_OPERATION"::equals).count());
+        }
+        assertEquals(1, itemService.backpack(userId).getFirst().getQuantity());
+        assertEquals(1, profileService.get(userId).getRobBoostCharges());
+    }
+
+    @Test
     void huYanSupportItemsApplyTheirConfiguredEffects() {
         long userId = 80013L;
         adminService.adjust(userId, userId, "items", new BigDecimal("5000"), true, "support-item-seed");
@@ -283,8 +393,57 @@ class EconomyServiceIntegrationTests {
         itemService.use(userId, "items", "fishing-luck-bait", 1, "use-luck-bait");
 
         var profile = profileService.get(userId);
-        assertEquals(1, profile.getRobBoostCharges());
+        assertEquals(0, profile.getRobBoostCharges());
+        assertEquals(100, itemService.equipment(userId).batons().getFirst().energy());
+        assertEquals(1, itemService.backpack(userId).stream().filter(i -> i.getItemCode().equals("electric-baton")).findFirst().orElseThrow().getQuantity());
         assertEquals(1, profile.getFishingLuckCharges());
+    }
+
+    @Test
+    void itemPurchaseTopUpsWalletFromMainBankInOneTransaction() {
+        long userId = 80015L;
+        adminService.adjust(
+                userId,
+                userId,
+                "buyer",
+                new BigDecimal("1000"),
+                true,
+                "bank-fallback-seed"
+        );
+        bankingService.deposit(
+                userId,
+                "buyer",
+                new BigDecimal("900"),
+                "bank-fallback-deposit"
+        );
+
+        EconomyItemService.PurchaseResult purchase = itemService.buy(
+                userId,
+                "buyer",
+                "red-bull",
+                1,
+                "bank-fallback-buy"
+        );
+
+        assertEquals(new BigDecimal("788.00"), purchase.bankTopUp());
+        assertEquals(new BigDecimal("0.00"), purchase.walletBalance());
+        assertEquals(new BigDecimal("112.00"), purchase.bankBalance());
+        assertEquals(
+                new BigDecimal("0.00"),
+                ledgerService.balance(userId, EconomyAccountScope.WALLET).balance()
+        );
+        assertEquals(
+                new BigDecimal("112.00"),
+                ledgerService.balance(userId, EconomyAccountScope.MAIN_BANK).balance()
+        );
+        assertEquals(
+                1,
+                itemService.backpack(userId).stream()
+                        .filter(item -> item.getItemCode().equals("red-bull"))
+                        .findFirst()
+                        .orElseThrow()
+                        .getQuantity()
+        );
     }
 
     @Test
@@ -386,7 +545,7 @@ class EconomyServiceIntegrationTests {
                 .orElseThrow();
 
         assertEquals("排行榜用户", entry.nickname());
-        assertEquals("测试群聊 (123456789)", entry.groupDisplay());
+        assertEquals("测试群聊", entry.groupDisplay());
         assertEquals(new BigDecimal("300.00"), entry.balance());
     }
 

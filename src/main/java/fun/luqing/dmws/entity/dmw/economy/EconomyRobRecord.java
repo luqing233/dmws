@@ -33,6 +33,16 @@ public class EconomyRobRecord {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
+    @Column(length = 32)
+    private String outcome;
+    private Integer injury;
+    @Column(name = "injured_user_id")
+    private Long injuredUserId;
+    @Column(name = "crime_after")
+    private Integer crimeAfter;
+    @Column(name = "operation_id", length = 80)
+    private String operationId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

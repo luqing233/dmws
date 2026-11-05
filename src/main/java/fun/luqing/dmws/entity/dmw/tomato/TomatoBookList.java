@@ -27,8 +27,6 @@ public class TomatoBookList {
     @Column(nullable = false)
     private Long totalWords = 0L; // 总字数，默认 0
 
-/*    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private BookStatus status = BookStatus.SERIALIZING; //书籍状态，默认为 连载*/
+
 
 }

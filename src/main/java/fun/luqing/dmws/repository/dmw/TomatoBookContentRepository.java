@@ -55,7 +55,9 @@ public interface TomatoBookContentRepository extends JpaRepository<TomatoBookCon
     SELECT
         ds.dt AS update_date,
         COALESCE(COUNT(tbc.book_id), 0) AS chapter_count,
-        COALESCE(SUM(tbc.word_count), 0) AS total_word_count
+        COALESCE(SUM(tbc.word_count), 0) AS total_word_count,
+        COALESCE(SUM(CASE WHEN tbc.book_id IS NOT NULL
+            AND (tbc.word_count IS NULL OR tbc.word_count <= 0) THEN 1 ELSE 0 END), 0) AS missing_word_count_chapters
     FROM date_series ds
     LEFT JOIN tomato_book_content tbc
         ON DATE(tbc.update_time) = ds.dt

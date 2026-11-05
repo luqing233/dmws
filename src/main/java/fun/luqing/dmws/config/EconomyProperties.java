@@ -15,6 +15,7 @@ import java.time.ZoneId;
 public class EconomyProperties {
 
     private boolean enabled = true;
+    private boolean conditionSchedulerEnabled = true;
     private String timeZone = "Asia/Shanghai";
     private BigDecimal signMin = new BigDecimal("50.00");
     private BigDecimal signMax = new BigDecimal("500.00");

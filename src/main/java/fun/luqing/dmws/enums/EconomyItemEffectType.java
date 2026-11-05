@@ -7,5 +7,8 @@ public enum EconomyItemEffectType {
     SIGN_BONUS,
     SIGN_STREAK_RESTORE,
     ROB_BOOST,
-    FISHING_LUCK
+    FISHING_LUCK,
+    ELECTRIC_BATON,
+    BATON_CHARGER,
+    CRIME_REDUCTION
 }

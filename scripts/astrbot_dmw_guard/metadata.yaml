@@ -1,0 +1,5 @@
+name: dmw_economy_guard
+display_name: DMW 经济操作保护
+desc: 绑定可信 OneBot 消息身份并使用真实工具回执
+version: v1.0.0
+author: DMW

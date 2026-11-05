@@ -1,0 +1,5 @@
+name: dmw_tomato_guard
+display_name: DMW 小说回执保护
+desc: 保留缺失、排队、取消和重试的真实状态
+version: v1.0.2
+author: DMW

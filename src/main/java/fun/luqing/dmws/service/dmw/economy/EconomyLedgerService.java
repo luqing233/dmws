@@ -6,10 +6,7 @@ import fun.luqing.dmws.entity.dmw.economy.EconomyAccount;
 import fun.luqing.dmws.entity.dmw.economy.EconomyLedgerEntry;
 import fun.luqing.dmws.enums.EconomyAccountScope;
 import fun.luqing.dmws.enums.EconomyLedgerReason;
-import fun.luqing.dmws.repository.dmw.economy.EconomyAccountRepository;
-import fun.luqing.dmws.repository.dmw.economy.EconomyLedgerEntryRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,9 +21,8 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class EconomyLedgerService {
 
-    private final EconomyAccountRepository accountRepository;
-    private final EconomyLedgerEntryRepository ledgerEntryRepository;
-    private final EconomyAccountProvisioner accountProvisioner;
+    private final EconomyLedgerStore store;
+    private final EconomyLedgerQueryService queries;
 
     @Transactional(
             propagation = Propagation.MANDATORY,
@@ -42,8 +38,8 @@ public class EconomyLedgerService {
             String description
     ) {
         BigDecimal normalized = EconomyMoney.positive(amount);
-        EconomyAccount account = lockOrCreate(userAccountKey(userId), scope, userId);
-        return change(account, normalized, operationId, reason, actorId, description);
+        EconomyAccount account = store.lockOrCreate(userAccountKey(userId), scope, userId);
+        return store.change(account, normalized, operationId, reason, actorId, description);
     }
 
     @Transactional(
@@ -60,11 +56,87 @@ public class EconomyLedgerService {
             String description
     ) {
         BigDecimal normalized = EconomyMoney.positive(amount);
-        EconomyAccount account = lockOrCreate(userAccountKey(userId), scope, userId);
+        EconomyAccount account = store.lockOrCreate(userAccountKey(userId), scope, userId);
         if (account.getBalance().compareTo(normalized) < 0) {
             throw new EconomyException("INSUFFICIENT_BALANCE", "余额不足");
         }
-        return change(account, normalized.negate(), operationId, reason, actorId, description);
+        return store.change(account, normalized.negate(), operationId, reason, actorId, description);
+    }
+
+    @Transactional(
+            propagation = Propagation.MANDATORY,
+            transactionManager = "dmwTransactionManager"
+    )
+    public BankFallbackDebit debitUserWithBankFallback(
+            long userId,
+            BigDecimal amount,
+            String operationId,
+            EconomyLedgerReason reason,
+            Long actorId,
+            String description
+    ) {
+        BigDecimal normalized = EconomyMoney.positive(amount);
+        AccountRef walletRef = new AccountRef(
+                userAccountKey(userId),
+                EconomyAccountScope.WALLET,
+                userId
+        );
+        AccountRef bankRef = new AccountRef(
+                userAccountKey(userId),
+                EconomyAccountScope.MAIN_BANK,
+                userId
+        );
+        Map<AccountRef, EconomyAccount> lockedAccounts = new HashMap<>();
+        Stream.of(walletRef, bankRef)
+                .sorted()
+                .forEach(ref -> lockedAccounts.put(
+                        ref,
+                        store.lockOrCreate(ref.key(), ref.scope(), ref.ownerId())
+                ));
+
+        EconomyAccount wallet = lockedAccounts.get(walletRef);
+        EconomyAccount bank = lockedAccounts.get(bankRef);
+        BigDecimal shortfall = normalized.subtract(wallet.getBalance()).max(BigDecimal.ZERO);
+        if (shortfall.signum() > 0) {
+            if (bank.getBalance().compareTo(shortfall) < 0) {
+                throw new EconomyException(
+                        "INSUFFICIENT_BALANCE",
+                        "钱包和主银行余额不足：需要 " + EconomyMoney.format(normalized)
+                                + "，钱包 " + EconomyMoney.format(wallet.getBalance())
+                                + "，主银行 " + EconomyMoney.format(bank.getBalance())
+                );
+            }
+            store.change(
+                    bank,
+                    shortfall.negate(),
+                    operationId,
+                    EconomyLedgerReason.BANK_WITHDRAW,
+                    actorId,
+                    "余额不足时自动从主银行补足"
+            );
+            store.change(
+                    wallet,
+                    shortfall,
+                    operationId,
+                    EconomyLedgerReason.BANK_WITHDRAW,
+                    actorId,
+                    "余额不足时自动补足钱包"
+            );
+        }
+
+        AccountBalance charge = store.change(
+                wallet,
+                normalized.negate(),
+                operationId,
+                reason,
+                actorId,
+                description
+        );
+        return new BankFallbackDebit(
+                charge,
+                EconomyMoney.normalize(shortfall),
+                EconomyMoney.normalize(bank.getBalance())
+        );
     }
 
     @Transactional(
@@ -81,13 +153,31 @@ public class EconomyLedgerService {
             String description
     ) {
         BigDecimal normalized = EconomyMoney.positive(requested);
-        EconomyAccount account = lockOrCreate(userAccountKey(userId), scope, userId);
-        BigDecimal actual = account.getBalance().min(normalized);
+        EconomyAccount account = store.lockOrCreate(userAccountKey(userId), scope, userId);
+        BigDecimal actual = account.getBalance().max(BigDecimal.ZERO).min(normalized);
         if (actual.signum() > 0) {
-            change(account, actual.negate(), operationId, reason, actorId, description);
+            store.change(account, actual.negate(), operationId, reason, actorId, description);
         }
         return EconomyMoney.normalize(actual);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
+    public MedicalPayment chargeHospital(long userId, BigDecimal amount, String operationId, String description) {
+        BigDecimal fee = EconomyMoney.positive(amount);
+        // Same WALLET -> MAIN_BANK enum order as AccountRef sorting in other debit paths.
+        EconomyAccount wallet = store.lockOrCreate(userAccountKey(userId), EconomyAccountScope.WALLET, userId);
+        EconomyAccount bank = store.lockOrCreate(userAccountKey(userId), EconomyAccountScope.MAIN_BANK, userId);
+        BigDecimal previousDebt = bank.getBalance().min(BigDecimal.ZERO).negate();
+        BigDecimal walletPaid = wallet.getBalance().max(BigDecimal.ZERO).min(fee);
+        if (walletPaid.signum() > 0) store.change(wallet, walletPaid.negate(), operationId,
+                EconomyLedgerReason.HOSPITAL_FEE, userId, description);
+        BigDecimal bankPaid = fee.subtract(walletPaid);
+        if (bankPaid.signum() > 0) store.medicalDebt(bank, bankPaid, operationId, description);
+        BigDecimal borrowed = bank.getBalance().min(BigDecimal.ZERO).negate().subtract(previousDebt);
+        return new MedicalPayment(fee, EconomyMoney.normalize(borrowed), wallet.getBalance(), bank.getBalance());
+    }
+
+    public record MedicalPayment(BigDecimal fee, BigDecimal borrowed, BigDecimal wallet, BigDecimal bank) { }
 
     @Transactional(
             propagation = Propagation.MANDATORY,
@@ -104,49 +194,9 @@ public class EconomyLedgerService {
             Long actorId,
             String description
     ) {
-        BigDecimal normalized = EconomyMoney.positive(amount);
-        if (fromUserId == toUserId && fromScope == toScope) {
-            throw new EconomyException("SAME_ACCOUNT", "不能向同一个账户转账");
-        }
-
-        AccountRef fromRef = new AccountRef(userAccountKey(fromUserId), fromScope, fromUserId);
-        AccountRef toRef = new AccountRef(userAccountKey(toUserId), toScope, toUserId);
-        Map<AccountRef, EconomyAccount> lockedAccounts = new HashMap<>();
-        Stream.of(fromRef, toRef)
-                .sorted()
-                .forEach(ref -> lockedAccounts.put(
-                        ref,
-                        lockOrCreate(ref.key(), ref.scope(), ref.ownerId())
-                ));
-
-        EconomyAccount lockedFrom = lockedAccounts.get(fromRef);
-        EconomyAccount lockedTo = lockedAccounts.get(toRef);
-
-        if (lockedFrom.getBalance().compareTo(normalized) < 0) {
-            throw new EconomyException("INSUFFICIENT_BALANCE", "余额不足");
-        }
-        BigDecimal targetBalance = lockedTo.getBalance().add(normalized);
-        if (targetBalance.compareTo(EconomyMoney.MAX) > 0) {
-            throw new EconomyException("AMOUNT_TOO_LARGE", "目标账户余额超过系统上限");
-        }
-
-        AccountBalance fromBalance = change(
-                lockedFrom,
-                normalized.negate(),
-                operationId,
-                reason,
-                actorId,
-                description
-        );
-        AccountBalance toBalance = change(
-                lockedTo,
-                normalized,
-                operationId,
-                reason,
-                actorId,
-                description
-        );
-        return new TransferResult(fromBalance, toBalance);
+        RawTransferResult result = transferAccount(userAccountKey(fromUserId), fromScope, fromUserId,
+                userAccountKey(toUserId), toScope, toUserId, amount, operationId, reason, actorId, description);
+        return new TransferResult(result.from(), result.to());
     }
 
     @Transactional(
@@ -163,8 +213,8 @@ public class EconomyLedgerService {
             Long actorId,
             String description
     ) {
-        EconomyAccount account = lockOrCreate(accountKey, scope, ownerId);
-        return change(account, EconomyMoney.positive(amount), operationId, reason, actorId, description);
+        EconomyAccount account = store.lockOrCreate(accountKey, scope, ownerId);
+        return store.change(account, EconomyMoney.positive(amount), operationId, reason, actorId, description);
     }
 
     @Transactional(
@@ -182,11 +232,11 @@ public class EconomyLedgerService {
             String description
     ) {
         BigDecimal normalized = EconomyMoney.positive(amount);
-        EconomyAccount account = lockOrCreate(accountKey, scope, ownerId);
+        EconomyAccount account = store.lockOrCreate(accountKey, scope, ownerId);
         if (account.getBalance().compareTo(normalized) < 0) {
             throw new EconomyException("INSUFFICIENT_BALANCE", "账户余额不足");
         }
-        return change(account, normalized.negate(), operationId, reason, actorId, description);
+        return store.change(account, normalized.negate(), operationId, reason, actorId, description);
     }
 
     @Transactional(
@@ -218,7 +268,7 @@ public class EconomyLedgerService {
                 .sorted()
                 .forEach(ref -> lockedAccounts.put(
                         ref,
-                        lockOrCreate(ref.key(), ref.scope(), ref.ownerId())
+                        store.lockOrCreate(ref.key(), ref.scope(), ref.ownerId())
                 ));
         EconomyAccount from = lockedAccounts.get(fromRef);
         EconomyAccount to = lockedAccounts.get(toRef);
@@ -229,7 +279,7 @@ public class EconomyLedgerService {
             throw new EconomyException("AMOUNT_TOO_LARGE", "目标账户余额超过系统上限");
         }
 
-        AccountBalance fromBalance = change(
+        AccountBalance fromBalance = store.change(
                 from,
                 normalized.negate(),
                 operationId,
@@ -237,7 +287,7 @@ public class EconomyLedgerService {
                 actorId,
                 description
         );
-        AccountBalance toBalance = change(
+        AccountBalance toBalance = store.change(
                 to,
                 normalized,
                 operationId,
@@ -312,85 +362,26 @@ public class EconomyLedgerService {
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public AccountBalance balance(long userId, EconomyAccountScope scope) {
-        BigDecimal balance = accountRepository.findByAccountKeyAndScope(userAccountKey(userId), scope)
-                .map(EconomyAccount::getBalance)
-                .orElseGet(EconomyMoney::zero);
-        return new AccountBalance(userId, scope, EconomyMoney.normalize(balance));
+        return queries.balance(userId, scope);
     }
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public BigDecimal total(EconomyAccountScope scope) {
-        return accountRepository.findAllByScopeOrderByBalanceDesc(scope).stream()
-                .map(EconomyAccount::getBalance)
-                .reduce(EconomyMoney.zero(), BigDecimal::add);
+        return queries.total(scope);
     }
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public BigDecimal accountBalance(String accountKey, EconomyAccountScope scope) {
-        return accountRepository.findByAccountKeyAndScope(accountKey, scope)
-                .map(EconomyAccount::getBalance)
-                .map(EconomyMoney::normalize)
-                .orElseGet(EconomyMoney::zero);
+        return queries.accountBalance(accountKey, scope);
     }
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public List<EconomyLedgerEntry> recentEntries(long userId, EconomyAccountScope scope, int limit) {
-        List<EconomyLedgerEntry> entries =
-                ledgerEntryRepository.findByAccountKeyAndScopeOrderByIdDesc(userAccountKey(userId), scope);
-        return entries.stream().limit(Math.max(0, limit)).toList();
+        return queries.recentEntries(userId, scope, limit);
     }
 
     public String userAccountKey(long userId) {
         return "u" + userId;
-    }
-
-    private AccountBalance change(
-            EconomyAccount account,
-            BigDecimal delta,
-            String operationId,
-            EconomyLedgerReason reason,
-            Long actorId,
-            String description
-    ) {
-        BigDecimal balanceAfter = account.getBalance().add(delta);
-        if (balanceAfter.signum() < 0) {
-            throw new EconomyException("INSUFFICIENT_BALANCE", "余额不足");
-        }
-        if (balanceAfter.compareTo(EconomyMoney.MAX) > 0) {
-            throw new EconomyException("AMOUNT_TOO_LARGE", "账户余额超过系统上限");
-        }
-        account.setBalance(EconomyMoney.normalize(balanceAfter));
-        accountRepository.save(account);
-
-        EconomyLedgerEntry entry = new EconomyLedgerEntry();
-        entry.setOperationId(operationId);
-        entry.setAccountKey(account.getAccountKey());
-        entry.setScope(account.getScope());
-        entry.setDelta(EconomyMoney.normalize(delta));
-        entry.setBalanceAfter(account.getBalance());
-        entry.setReason(reason);
-        entry.setActorId(actorId);
-        entry.setDescription(description);
-        ledgerEntryRepository.save(entry);
-
-        return new AccountBalance(
-                account.getOwnerId() == null ? 0L : account.getOwnerId(),
-                account.getScope(),
-                account.getBalance()
-        );
-    }
-
-    private EconomyAccount lockOrCreate(String accountKey, EconomyAccountScope scope, Long ownerId) {
-        // MySQL InnoDB takes a gap lock for a missing row on SELECT ... FOR UPDATE.
-        // Creating the account in another transaction afterwards would wait on that
-        // gap lock until the outer request times out. Provision first, then lock.
-        try {
-            accountProvisioner.ensureAccount(accountKey, scope, ownerId);
-        } catch (DataIntegrityViolationException ignored) {
-            // Another request won the unique-key race. The account is now available.
-        }
-        return accountRepository.findForUpdate(accountKey, scope)
-                .orElseThrow(() -> new EconomyException("ACCOUNT_MISSING", "账户创建失败"));
     }
 
     public record AccountBalance(long userId, EconomyAccountScope scope, BigDecimal balance) {
@@ -400,6 +391,13 @@ public class EconomyLedgerService {
     }
 
     public record RawTransferResult(AccountBalance from, AccountBalance to) {
+    }
+
+    public record BankFallbackDebit(
+            AccountBalance charge,
+            BigDecimal bankTopUp,
+            BigDecimal bankBalance
+    ) {
     }
 
     private record AccountRef(

@@ -18,8 +18,10 @@ public class McpConfig {
     @Getter
     @Setter
     public static class Economy {
-        /** Local QQ operator used by economy MCP write tools. */
+        /** Local QQ operator for transfer/rob and default queries; item use defaults to the bot. */
         private Long operatorId;
+        /** Separate HMAC secret shared only with the trusted AstrBot message adapter. */
+        private String contextSecret;
     }
 
     /**
@@ -28,7 +30,7 @@ public class McpConfig {
     @Getter
     @Setter
     public static class McpServer {
-        /** 服务地址，例如 http://localhost:8000/mcp */
+        /** 服务地址，例如 http://localhost:8001/mcp */
         private String url;
         /** Authorization 头的完整取值，例如 "Bearer xxxx" */
         private String token;

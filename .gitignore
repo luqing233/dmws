@@ -36,6 +36,8 @@ build/
 temp/
 logs/
 application.yaml
+application.yaml.*
+__pycache__/
 
 ### GitHub Copilot ###
 .github/copilot-instructions.md

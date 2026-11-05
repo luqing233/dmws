@@ -9,9 +9,9 @@ import com.mikuac.shiro.dto.event.message.GroupMessageEvent;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookContentService;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
-import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookContentService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookListService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoSubscriptionGroupService;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
 import fun.luqing.dmws.common.annotation.CommandInfo;
 import lombok.RequiredArgsConstructor;
@@ -74,8 +74,8 @@ public class UpdateChapterCommand {
         }
 
         TomatoBookContentService.UpdateResult updateResult = contentService.updateAllChapters(bookId,false);
-        String resultMsg = String.format("《%s》章节内容更新完成。\n成功：%d 章\n失败：%d 章",
-                book.getBookName(), updateResult.success(), updateResult.fail());
+        String resultMsg = String.format("《%s》章节内容%s。\n成功：%d 章\n未获取：%d 章",
+                book.getBookName(), updateResult.fail() == 0 ? "更新完成" : "部分完成", updateResult.success(), updateResult.fail());
         TomatoMessageUtil.sendGroupMessage(bot, groupId, resultMsg);
     }
 

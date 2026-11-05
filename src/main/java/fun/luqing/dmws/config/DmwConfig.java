@@ -10,9 +10,6 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "dmws")
 public class DmwConfig {
-    private String wsUrl;
-    private String httpUrl;
-    private int maxMessages = 40;
     private long botId;
     private String botName;
     private long[] master;
@@ -22,7 +19,7 @@ public class DmwConfig {
     private String mcpServerToken;
 
     /**
-     * 番茄小说 MCP 服务配置（在线小说接口与本地下载器）。
+     * MCP 经济操作者及本地番茄下载器配置。
      */
     private McpConfig mcp = new McpConfig();
 

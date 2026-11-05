@@ -28,7 +28,8 @@ class EconomyDisplayFormatterTests {
         String content = EconomyDisplayFormatter.leaderboard(List.of(entry)).get(1);
 
         assertTrue(content.contains("用户：伊蕾娜"));
-        assertTrue(content.contains("开户群：测试群聊 (123456)"));
+        assertTrue(content.contains("开户群：测试群聊"));
+        org.junit.jupiter.api.Assertions.assertFalse(content.contains("123456"));
         assertTrue(content.contains("主银行存款：20,000.00 金币"));
     }
 

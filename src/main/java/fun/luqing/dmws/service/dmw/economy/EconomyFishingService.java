@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -32,10 +31,13 @@ public class EconomyFishingService {
     private final EconomyLedgerService ledgerService;
     private final EconomyFishRepository fishRepository;
     private final EconomyFishingCatchRepository catchRepository;
+    private final EconomyConditionService conditions;
+    private final EconomyFishingRandom random;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public FishingResult fish(long userId, String nickname, String operationId) {
         EconomyUserProfile profile = profileService.getOrCreateForUpdate(userId, nickname);
+        conditions.requireAvailable(userId, nickname);
         if (!Boolean.TRUE.equals(profile.getFishingRodPurchased())) {
             throw new EconomyException("FISHING_ROD_REQUIRED", "请先购买鱼竿");
         }
@@ -67,23 +69,18 @@ public class EconomyFishingService {
 
         Fish fish = selectFish(fishPool);
         profile.setLastFishedAt(now);
-        double chance = Math.max(0.25, 0.9 - fish.getDifficulty() / 150.0
+        double chance = Math.min(1, Math.max(0.25, 0.9 - fish.getDifficulty() / 150.0
                 - Math.max(0, fish.getLevel() - profile.getFishingRodLevel()) * 0.15
-                + (luckUsed ? 0.20 : 0.0));
-        boolean success = ThreadLocalRandom.current().nextDouble() < chance;
+                + (luckUsed ? 0.20 : 0.0)));
+        boolean success = random.chance(chance);
         BigDecimal reward = EconomyMoney.zero();
         BigDecimal size = BigDecimal.ZERO;
         if (success) {
             int min = Math.max(1, fish.getDimensionsMin());
             int max = Math.max(min, fish.getDimensionsMax());
-            size = BigDecimal.valueOf(ThreadLocalRandom.current().nextDouble(min, max))
+            size = BigDecimal.valueOf(min + (max - min) * random.fraction())
                     .setScale(2, RoundingMode.HALF_UP);
-            BigDecimal sizeFactor = BigDecimal.valueOf(0.75 + ThreadLocalRandom.current().nextDouble(0, 0.5));
-            reward = EconomyMoney.positive(
-                    BigDecimal.valueOf(fish.getPrice())
-                            .multiply(sizeFactor)
-                            .setScale(2, RoundingMode.HALF_UP)
-            );
+            reward = EconomyMoney.positive(EconomyFishingRules.reward(fish.getPrice(), size, min, max, profile.getFishingRodLevel()));
             ledgerService.creditUser(
                     userId,
                     EconomyAccountScope.WALLET,
@@ -111,7 +108,9 @@ public class EconomyFishingService {
                 cost,
                 balance,
                 profile.getFishingRodLevel(),
-                luckUsed
+                luckUsed,
+                fish.getDescription(),
+                EconomyFishingRules.rodMultiplier(profile.getFishingRodLevel())
         );
     }
 
@@ -122,9 +121,8 @@ public class EconomyFishingService {
             throw new EconomyException("FISHING_ROD_OWNED", "你已经拥有鱼竿");
         }
         operationService.start(operationId, "FISHING_ROD_BUY", userId, "购买鱼竿");
-        ledgerService.debitUser(
+        ledgerService.debitUserWithBankFallback(
                 userId,
-                EconomyAccountScope.WALLET,
                 EconomyMoney.positive(properties.getFishingRodPrice()),
                 operationId,
                 EconomyLedgerReason.FISHING_ROD_UPGRADE,
@@ -132,8 +130,11 @@ public class EconomyFishingService {
                 "购买鱼竿"
         );
         profile.setFishingRodPurchased(true);
-        profile.setFishingRodLevel(1);
-        return 1;
+        // Some imported accounts have a historical level but do not yet own a rod.
+        // Buying equipment must not reset their earned level.
+        int retained = Math.max(1, profile.getFishingRodLevel());
+        profile.setFishingRodLevel(retained);
+        return retained;
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
@@ -142,16 +143,13 @@ public class EconomyFishingService {
         if (!Boolean.TRUE.equals(profile.getFishingRodPurchased())) {
             throw new EconomyException("FISHING_ROD_REQUIRED", "请先购买鱼竿");
         }
-        if (profile.getFishingRodLevel() >= 5) {
-            throw new EconomyException("ROD_MAX_LEVEL", "鱼竿已经达到最高等级");
+        if (profile.getFishingRodLevel() >= EconomyFishingRules.MAX_LEVEL) {
+            throw new EconomyException("ROD_MAX_LEVEL", "已达到本版鱼竿升级上限 100 级；历史等级保留");
         }
         operationService.start(operationId, "FISHING_ROD_UPGRADE", userId, "升级鱼竿");
-        BigDecimal cost = EconomyMoney.positive(
-                BigDecimal.valueOf(profile.getFishingRodLevel()).multiply(new BigDecimal("1000"))
-        );
-        ledgerService.debitUser(
+        BigDecimal cost = EconomyMoney.positive(EconomyFishingRules.upgradeCost(profile.getFishingRodLevel()));
+        ledgerService.debitUserWithBankFallback(
                 userId,
-                EconomyAccountScope.WALLET,
                 cost,
                 operationId,
                 EconomyLedgerReason.FISHING_ROD_UPGRADE,
@@ -165,6 +163,19 @@ public class EconomyFishingService {
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public int rodLevel(long userId) {
         return profileService.get(userId).getFishingRodLevel();
+    }
+
+    @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
+    public String describeRod(long userId) {
+        var profile = profileService.get(userId);
+        int level = profile.getFishingRodLevel();
+        String text = "鱼竿等级：" + level;
+        if (!Boolean.TRUE.equals(profile.getFishingRodPurchased())) text += "\n尚未购买鱼竿，购置后沿用此等级";
+        text += "\n等级售价系数：×" + EconomyFishingRules.rodMultiplier(level).toPlainString();
+        if (level > EconomyFishingRules.MAX_LEVEL) text += "（按100级生效，历史原始等级保留）";
+        if (level < EconomyFishingRules.MAX_LEVEL) text += "\n升级至 " + (level + 1) + " 级需 " + EconomyMoney.format(EconomyFishingRules.upgradeCost(level)) + " 金币";
+        else text += "\n已达本版升级上限";
+        return text;
     }
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
@@ -191,12 +202,12 @@ public class EconomyFishingService {
 
     private Fish selectFish(List<Fish> fishPool) {
         long total = fishPool.stream()
-                .mapToLong(fish -> Math.max(1, 120 - fish.getDifficulty()))
+                .mapToLong(fish -> Math.max(1L, 120L - fish.getDifficulty()))
                 .sum();
-        long selected = ThreadLocalRandom.current().nextLong(total);
+        long selected = random.weight(total);
         long cursor = 0;
         for (Fish fish : fishPool) {
-            cursor += Math.max(1, 120 - fish.getDifficulty());
+            cursor += Math.max(1L, 120L - fish.getDifficulty());
             if (selected < cursor) {
                 return fish;
             }
@@ -230,8 +241,11 @@ public class EconomyFishingService {
             BigDecimal cost,
             BigDecimal walletBalance,
             int rodLevel,
-            boolean luckUsed
+            boolean luckUsed,
+            String fishDescription,
+            BigDecimal rodMultiplier
     ) {
+        public BigDecimal netProfit() { return reward.subtract(cost).setScale(2, RoundingMode.HALF_UP); }
     }
 
     public record LeaderboardEntry(

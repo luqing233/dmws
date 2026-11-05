@@ -5,7 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 import fun.luqing.dmws.config.ConfigManager;
 import fun.luqing.dmws.config.McpConfig;
-import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoLogContext;
+import fun.luqing.dmws.common.logging.TomatoLogContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -29,14 +29,15 @@ public class TomatoApiClient {
     private static final int DIRECTORY_MAX_PAGES = 100;
     /** 下载器批量读取单次上限 */
     private static final int MAX_BATCH = 20;
-    /** 批量下载的轮询次数与间隔（每次 0.5 秒，最多约 3 分钟） */
-    private static final int BATCH_POLL_TIMES = 360;
-    private static final long BATCH_POLL_INTERVAL_MS = 500L;
+    /** 批量下载的轮询次数与间隔（每次 2 秒，最多约 3 分钟） */
+    private static final int BATCH_POLL_TIMES = 90;
+    private static final long BATCH_POLL_INTERVAL_MS = 2000L;
 
     private final ConfigManager configManager;
     private volatile McpClient downloader;
     /** 最近一次正文获取失败的结构化错误码 */
-    private volatile String lastContentErrorCode;
+    private final ThreadLocal<String> lastContentErrorCode = new ThreadLocal<>();
+    private final Map<String, Map<String, TomatoChapterRecord>> directoryCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TomatoApiClient(ConfigManager configManager) {
         this.configManager = configManager;
@@ -115,274 +116,107 @@ public class TomatoApiClient {
         );
     }
 
-    /**
-     * 批量获取章节正文。
-     * 先用离散批量下载补齐目标章节，再按 item_ids 批量读取正文。
-     * 批量读取的 start_index/end_index 是下载器本地槽位，与书籍章节序号无关，
-     * 因此这里只用 item_ids 模式。
-     *
-     * @param bookId  所属书籍ID
-     * @param targets 待获取的章节
-     * @return 按章节ID索引的正文结果；未取到的章节不会出现在返回值中
-     */
-    public Map<String, TomatoContentRecord> getChapterContents(String bookId,
-                                                               List<ChapterTarget> targets) {
+    /** Unified nonblocking v0.3 API. Downloads are opt-in and target item IDs only. */
+    public JsonNode requestChapters(String bookId, List<String> itemIds, boolean downloadMissing,
+                                    int perChapter, int total) {
+        validateIds(bookId, itemIds, 20);
+        if (perChapter < 0 || perChapter > 200000 || total < 1 || total > 1000000) {
+            throw new IllegalArgumentException("正文预算超出范围（每章0–200000，总计1–1000000）");
+        }
+        ObjectNode args = MAPPER.createObjectNode().put("book_id", bookId)
+                .put("download_missing", downloadMissing).put("max_chars_per_chapter", perChapter).put("max_total_chars", total);
+        args.set("item_ids", MAPPER.valueToTree(itemIds));
+        JsonNode payload = downloader().callToolResult("tnd_get_chapters", args);
+        if (payload != null && payload.hasNonNull("book_id") && !bookId.equals(payload.path("book_id").asText())) {
+            return MAPPER.createObjectNode().put("mcp_is_error", true).put("code", "BOOK_ID_MISMATCH")
+                    .put("message", "下载器返回了不同书籍的正文，已拒绝使用");
+        }
+        return payload;
+    }
+
+    public JsonNode checkChapters(String bookId, List<String> itemIds) {
+        validateIds(bookId, itemIds, 50);
+        ObjectNode args = MAPPER.createObjectNode().put("book_id", bookId);
+        args.set("item_ids", MAPPER.valueToTree(itemIds));
+        return downloader().callToolResult("tnd_check_chapters", args);
+    }
+
+    public JsonNode downloadBatch(String tool, String batchId, boolean cancelCurrent) {
+        if (!List.of("tnd_get_batch_status", "tnd_cancel_batch", "tnd_retry_batch").contains(tool)
+                || batchId == null || batchId.isBlank() || batchId.length() > 200) {
+            throw new IllegalArgumentException("必须提供明确的下载批次ID");
+        }
+        ObjectNode args = MAPPER.createObjectNode().put("batch_id", batchId);
+        if ("tnd_cancel_batch".equals(tool)) args.put("cancel_current", cancelCurrent);
+        return downloader().callToolResult(tool, args);
+    }
+
+    public JsonNode downloaderDiagnostics() {
+        return downloader().callToolResult("tnd_get_diagnostics", MAPPER.createObjectNode());
+    }
+
+    public static void validateIds(String bookId, List<String> itemIds, int limit) {
+        if (bookId == null || !bookId.matches("[0-9]{1,128}") || itemIds == null || itemIds.isEmpty()
+                || itemIds.size() > limit || itemIds.stream().anyMatch(id -> id == null || !id.matches("[0-9]{1,128}"))) {
+            throw new IllegalArgumentException("book_id及章节ID必须是数字字符串，每次最多" + limit + "章");
+        }
+    }
+
+    /** Background backfill may wait on ONE batch. Chat reads use requestChapters directly. */
+    public Map<String, TomatoContentRecord> getChapterContents(String bookId, List<ChapterTarget> targets) {
         Map<String, TomatoContentRecord> result = new LinkedHashMap<>();
+        lastContentErrorCode.remove();
         if (targets == null || targets.isEmpty()) return result;
-
-        List<ChapterTarget> batch = targets.size() > MAX_BATCH
-                ? targets.subList(0, MAX_BATCH) : targets;
-
-        // 先按 item_ids 离散下载，只下缺的那几章，不会把中间章节当成连续区间
-        downloadDiscrete(bookId, batch);
-        readBatch(bookId, batch, result);
-        // 上游偶尔会变更 item_id，批量接口会整批失败；逐章重试并等待新 ID 下载。
-        for (ChapterTarget target : batch) {
-            if (result.containsKey(target.chapterId())) continue;
-            TomatoContentRecord record = getChapterContent(bookId, target.chapterId(), target.order());
-            if (record != null) {
-                result.put(target.chapterId(), record);
+        List<String> ids = targets.stream().map(ChapterTarget::chapterId).distinct().toList();
+        JsonNode root = requestChapters(bookId, ids, true, 0, 1000000);
+        if (root == null) { lastContentErrorCode.set(downloader().getLastToolErrorCode()); return result; }
+        if (root.path("mcp_is_error").asBoolean()) { lastContentErrorCode.set(root.path("code").asText("TOOL_ERROR")); return result; }
+        if (root.hasNonNull("batch_id") && "downloading".equals(root.path("status").asText())) {
+            String batchId = root.path("batch_id").asText();
+            for (int i = 0; i < BATCH_POLL_TIMES; i++) {
+                JsonNode status = downloadBatch("tnd_get_batch_status", batchId, false);
+                if (status == null || status.path("mcp_is_error").asBoolean()) break;
+                String state = status.path("status").asText();
+                if (List.of("done", "done_with_errors", "failed", "canceled", "canceling", "waiting_input").contains(state)) break;
+                try { Thread.sleep(BATCH_POLL_INTERVAL_MS); }
+                catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
             }
+            root = requestChapters(bookId, ids, false, 0, 1000000);
+        } else if (root.path("refresh_required").asBoolean()) {
+            root = requestChapters(bookId, ids, false, 0, 1000000);
+        }
+        if (root == null) { lastContentErrorCode.set(downloader().getLastToolErrorCode()); return result; }
+        if (root.path("mcp_is_error").asBoolean()) { lastContentErrorCode.set(root.path("code").asText("TOOL_ERROR")); return result; }
+        if (root.hasNonNull("download_error")) lastContentErrorCode.set(root.path("download_error").path("code").asText("DOWNLOAD_ERROR"));
+        else lastContentErrorCode.remove();
+        Map<String, JsonNode> rows = new LinkedHashMap<>();
+        for (JsonNode row : root.path("chapters")) rows.put(row.path("item_id").asText(), row);
+        for (ChapterTarget target : targets) {
+            JsonNode row = rows.get(target.chapterId());
+            if (row == null || row.path("truncated").asBoolean()
+                    || (root.path("truncated").asBoolean() && !row.has("truncated"))) continue;
+            String text = row.path("content").asText("");
+            if (!hasBody(text)) continue;
+            var metadata = directoryCache.getOrDefault(bookId, Map.of()).get(target.chapterId());
+            result.put(target.chapterId(), new TomatoContentRecord(bookId, root.path("book_name").asText(""),
+                    target.order(), row.path("title").asText(""), text,
+                    metadata == null ? "" : metadata.firstPassTime(), text.length()));
         }
         return result;
     }
 
-    /**
-     * 触发离散批量下载并等待完成。
-     * 下载失败不影响后续读取：已经在本地的章节照样能读到。
-     */
-    private void downloadDiscrete(String bookId, List<ChapterTarget> batch) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        var idsArray = MAPPER.createArrayNode();
-        for (ChapterTarget t : batch) idsArray.add(t.chapterId());
-        args.set("item_ids", idsArray);
-
-        JsonNode started = downloader().callTool("tnd_start_discrete_downloads", args);
-        if (started == null) return;
-
-        JsonNode batchId = started.path("batch_id");
-        if (batchId.isMissingNode() || batchId.isNull()) return;
-
-        // 批量任务在后台逐章执行，这里轮询到结束
-        for (int i = 0; i < BATCH_POLL_TIMES; i++) {
-            ObjectNode statusArgs = MAPPER.createObjectNode();
-            statusArgs.set("batch_id", batchId);
-            JsonNode status = downloader().callTool("tnd_get_batch_status", statusArgs);
-            if (status == null) return;
-
-            String state = status.path("status").asText("");
-            if ("done".equals(state) || "done_with_errors".equals(state) || "failed".equals(state)) {
-                if (!"done".equals(state)) {
-                    log.warn("批量下载未完全成功: batchId={} status={} errors={}",
-                            batchId.asText(""), state, abbreviateJson(status.path("errors")));
-                }
-                return;
-            }
-            if ("waiting_input".equals(state)) {
-                log.warn("批量下载需要人工选择书名或格式，已跳过: batchId={}", batchId.asText(""));
-                return;
-            }
-            try {
-                Thread.sleep(BATCH_POLL_INTERVAL_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-        log.warn("批量下载等待超时: batchId={}", batchId.asText(""));
+    public record ChapterTarget(String chapterId, int order) { }
+    public String getLastContentErrorCode() { return lastContentErrorCode.get(); }
+    public static boolean isRetryable(String code) {
+        return code == null || !List.of("BOOK_NOT_FOUND", "INVALID_ARGUMENT", "BATCH_BUSY", "BATCH_ACTIVE", "BATCH_NOT_FOUND").contains(code);
     }
-
-    private String abbreviateJson(JsonNode node) {
-        String s = node == null ? "" : node.toString();
-        return s.length() <= 200 ? s : s.substring(0, 200) + "...";
-    }
-
-    /**
-     * 按 item_ids 批量读取正文并填充结果。
-     * 响应中带有 chapter_order，可直接作为章节序号，无需再查目录。
-     */
-    private void readBatch(String bookId, List<ChapterTarget> batch,
-                           Map<String, TomatoContentRecord> result) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        var idsArray = MAPPER.createArrayNode();
-        for (ChapterTarget t : batch) idsArray.add(t.chapterId());
-        args.set("item_ids", idsArray);
-
-        JsonNode root = downloader().callTool("tnd_read_downloaded_chapters", args);
-        if (root == null) return;
-
-        JsonNode chapters = root.path("chapters");
-        if (!chapters.isArray()) return;
-
-        Map<String, ChapterTarget> byId = new LinkedHashMap<>();
-        for (ChapterTarget t : batch) byId.put(t.chapterId(), t);
-
-        for (JsonNode ch : chapters) {
-            String itemId = ch.path("item_id").asText("");
-            ChapterTarget target = byId.get(itemId);
-            if (target == null) continue;
-
-            String text = ch.path("content").asText("");
-            if (text.isBlank()) continue;
-
-            // chapter_order 是番茄目录中的真实章节号，缺省时退回调用方传入的序号
-            int order = ch.path("chapter_order").asInt(target.order());
-
-            result.put(itemId, new TomatoContentRecord(
-                    bookId,
-                    root.path("book_name").asText(""),
-                    order,
-                    ch.path("title").asText(""),
-                    text,
-                    resolveChapterTime(bookId, itemId),
-                    countWords(text)
-            ));
-        }
-    }
-
-    /**
-     * 批量获取时的章节定位信息。
-     *
-     * @param chapterId 章节ID
-     * @param order     章节在书中的序号（1 起）
-     */
-    public record ChapterTarget(String chapterId, int order) {
-    }
-
-    /**
-     * 最近一次正文获取失败的结构化错误码。
-     * 取值见下载器工具：CHAPTER_NOT_DOWNLOADED / BOOK_NOT_FOUND /
-     * UPSTREAM_LIMITED / UPSTREAM_ERROR 等；无法识别的失败返回 null。
-     */
-    public String getLastContentErrorCode() {
-        return lastContentErrorCode;
-    }
-
-    /**
-     * 按错误码判断是否值得继续重试。
-     * 书不存在属于永久失败，重试再多次也不会有结果。
-     */
-    public static boolean isRetryable(String errorCode) {
-        if (errorCode == null || errorCode.isBlank()) return true;
-        return !"BOOK_NOT_FOUND".equals(errorCode) && !"INVALID_ARGUMENT".equals(errorCode);
-    }
-
-    /**
-     * 获取章节正文，调用方已知章节所属书籍与序号时使用，避免反查。
-     *
-     * @param bookId    所属书籍ID
-     * @param chapterId 章节ID
-     * @param order     章节序号（1 起）
-     * @return 章节正文与元数据；获取失败返回 null
-     */
     public TomatoContentRecord getChapterContent(String bookId, String chapterId, int order) {
-        TomatoContentRecord fromDownloader = fetchFromDownloader(bookId, chapterId, order);
-        if (fromDownloader != null) return fromDownloader;
-
-        TomatoLogContext.info(log, "下载器未能提供章节 {}", chapterId);
-        return null;
+        return getChapterContents(bookId, List.of(new ChapterTarget(chapterId, order))).get(chapterId);
     }
-
-    private TomatoContentRecord fetchFromDownloader(String bookId, String chapterId, int order) {
-        // 先看本地是否已下载，已下载就不再触发下载
-        JsonNode root = readDownloadedChapter(bookId, chapterId);
-        if (root != null) {
-            return buildContentRecord(bookId, chapterId, order, root);
-        }
-
-        if (!triggerChapterDownload(bookId, order)) {
-            lastContentErrorCode = downloader().getLastToolErrorCode();
-            return null;
-        }
-
-        // 下载完成后按 item_id 校验，只接受真正命中目标章节的结果
-        root = readDownloadedChapter(bookId, chapterId);
-        if (root == null) {
-            lastContentErrorCode = downloader().getLastToolErrorCode();
-            log.debug("章节 {} 下载后仍不可读，忽略旧章节以避免误报（bookId={} order={}）",
-                    chapterId, bookId, order);
-            return null;
-        }
-        lastContentErrorCode = null;
-        return buildContentRecord(bookId, chapterId, order, root);
-    }
-
-    private TomatoContentRecord buildContentRecord(String bookId, String chapterId, int order, JsonNode root) {
-        String text = root.path("content").asText("");
-        if (text.isBlank()) return null;
-
-        // 校验返回的确实是目标章节，避免下载器的本地槽位错位导致张冠李戴
-        String gotItemId = root.path("item_id").asText("");
-        if (!gotItemId.isEmpty() && !gotItemId.equals(chapterId)) {
-            log.warn("下载器返回的章节与请求不符: 期望={} 实际={}", chapterId, gotItemId);
-            return null;
-        }
-
-        return new TomatoContentRecord(
-                bookId,
-                root.path("book_name").asText(""),
-                order,
-                root.path("title").asText(""),
-                text,
-                resolveChapterTime(bookId, chapterId),
-                countWords(text)
-        );
-    }
-
-    /**
-     * 全项目统一的正文字数口径：正文字符数。
-     * 上游接口另有一个"官方字数"，它不含空白与标点，比字符数少约三分之一；
-     * 两种口径混用会让图表上的更新字数失真，因此统一以字符数为准。
-     */
-    private int countWords(String text) {
-        return text == null ? 0 : text.length();
-    }
-
-    /**
-     * 按 item_id 读取已下载章节。
-     * item_id 是唯一可靠的定位方式；响应中的 index 是下载器本地槽位，
-     * 会随下载顺序变化，不能作为章节序号的依据。
-     */
-    private JsonNode readDownloadedChapter(String bookId, String chapterId) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        args.put("item_id", chapterId);
-
-        return downloader().callTool("tnd_read_downloaded_chapter", args);
-    }
-
-    /**
-     * 触发单章下载并等待任务结束。
-     * 下载器的 index 取自目录接口的 order 字段（并非标题中的章号，两者可能不一致）。
-     */
-    private boolean triggerChapterDownload(String bookId, int order) {
-        if (order <= 0) return false;
-
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        args.put("index", order);
-
-        JsonNode started = downloader().callTool("tnd_start_chapter_download", args);
-        if (started == null) return false;
-
-        // 任务启动响应使用 id 字段表示 job_id
-        JsonNode jobId = started.has("job_id") ? started.path("job_id") : started.path("id");
-        if (jobId.isMissingNode() || jobId.isNull()) {
-            return true;
-        }
-
-        ObjectNode waitArgs = MAPPER.createObjectNode();
-        waitArgs.set("job_id", jobId);
-        waitArgs.put("timeout_seconds", 120);
-
-        JsonNode result = downloader().callTool("tnd_wait_job", waitArgs);
-        if (result == null) {
-            log.warn("等待章节下载任务失败: bookId={} order={}", bookId, order);
-            return false;
-        }
-        return true;
+    public static boolean hasBody(String text) {
+        if (text == null || text.isEmpty()) return false;
+        String decoded = org.jsoup.parser.Parser.unescapeEntities(text, false);
+        return decoded.codePoints().anyMatch(c -> !Character.isWhitespace(c) && !Character.isSpaceChar(c) && c != 0x200b && c != 0xfeff);
     }
 
     /**
@@ -428,24 +262,11 @@ public class TomatoApiClient {
             offset = next.asInt(offset + chapters.size());
         }
 
+        Map<String, TomatoChapterRecord> metadata = new LinkedHashMap<>();
+        list.forEach(row -> metadata.put(row.itemId(), row));
+        if (directoryCache.size() > 200) directoryCache.clear();
+        directoryCache.put(bookId, Map.copyOf(metadata));
         return list;
-    }
-
-    /**
-     * 查询单章的发布时间。
-     */
-    private String resolveChapterTime(String bookId, String chapterId) {
-        ObjectNode args = MAPPER.createObjectNode();
-        args.put("book_id", bookId);
-        args.put("item_id", chapterId);
-
-        JsonNode root = downloader().callTool("tnd_get_chapter_times", args);
-        if (root == null) return "";
-
-        JsonNode chapters = root.path("chapters");
-        if (!chapters.isArray() || chapters.isEmpty()) return "";
-
-        return chapters.get(0).path("first_pass_time").path("beijing_time").asText("");
     }
 
 }

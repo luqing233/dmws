@@ -9,6 +9,7 @@ import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.service.dmw.economy.EconomyPrivateBankService;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,7 @@ import java.util.List;
 public class EconomyPrivateBankPlugin {
 
     private final EconomyPrivateBankService privateBankService;
+    private final EconomyPlayerNameService names;
 
     @GroupMessageHandler
     @MessageHandlerFilter(startWith = {"银行创建"})
@@ -55,10 +57,11 @@ public class EconomyPrivateBankPlugin {
                 return "暂无私人银行";
             }
             StringBuilder builder = new StringBuilder("私人银行列表");
+            var owners = names.resolveAll(bot, event.getGroupId(), banks.stream().map(EconomyPrivateBankService.BankView::ownerId).toList());
             for (EconomyPrivateBankService.BankView bank : banks) {
                 builder.append("\n- ").append(bank.name())
                         .append(" [").append(bank.code()).append("]")
-                        .append(" 行长:").append(bank.ownerId())
+                        .append(" 行长:").append(owners.get(bank.ownerId()))
                         .append(" 资金:").append(EconomyMoney.format(bank.capital()));
             }
             return builder.toString();
@@ -76,10 +79,10 @@ public class EconomyPrivateBankPlugin {
                 if (bank == null) {
                     throw new EconomyException("ARGUMENT_REQUIRED", "请提供银行编码或名称");
                 }
-                return formatBank(bank);
+                return formatBank(bank, bot, event.getGroupId());
             }
             EconomyPrivateBankService.BankView bank = privateBankService.info(parts[0]);
-            return formatBank(bank);
+            return formatBank(bank, bot, event.getGroupId());
         });
     }
 
@@ -89,7 +92,7 @@ public class EconomyPrivateBankPlugin {
     public void myBank(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             EconomyPrivateBankService.BankView bank = privateBankService.myBank(event.getUserId());
-            return bank == null ? "你还没有创建银行" : formatBank(bank);
+            return bank == null ? "你还没有创建银行" : formatBank(bank, bot, event.getGroupId());
         });
     }
 
@@ -221,11 +224,11 @@ public class EconomyPrivateBankPlugin {
         });
     }
 
-    private String formatBank(EconomyPrivateBankService.BankView bank) {
+    private String formatBank(EconomyPrivateBankService.BankView bank, Bot bot, long groupId) {
         return "银行信息"
                 + "\n名称: " + bank.name()
                 + "\n编码: " + bank.code()
-                + "\n行长: " + bank.ownerId()
+                + "\n行长: " + names.resolve(bot, groupId, bank.ownerId())
                 + "\n资金: " + EconomyMoney.format(bank.capital())
                 + "\n描述: " + bank.description();
     }

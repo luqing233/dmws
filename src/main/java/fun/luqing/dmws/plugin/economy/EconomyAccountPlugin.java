@@ -15,6 +15,7 @@ import fun.luqing.dmws.service.dmw.economy.EconomyPrivateBankService;
 import fun.luqing.dmws.service.dmw.economy.EconomySignService;
 import fun.luqing.dmws.service.dmw.economy.EconomyTitleService;
 import fun.luqing.dmws.service.dmw.economy.EconomyUserProfileService;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -35,6 +36,7 @@ public class EconomyAccountPlugin {
     private final EconomyProperties economyProperties;
     private final EconomyUserProfileService profileService;
     private final DmwConfig dmwConfig;
+    private final EconomyPlayerNameService names;
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "(?i)^(签到|打卡|sign)$")
@@ -144,7 +146,7 @@ public class EconomyAccountPlugin {
             if (target == null) {
                 throw new EconomyException("TARGET_REQUIRED", "请 @ 要转账的用户");
             }
-            String targetName = EconomyCommandSupport.groupMemberDisplayName(
+            String targetName = names.resolve(
                     bot,
                     event.getGroupId(),
                     target
@@ -182,6 +184,9 @@ public class EconomyAccountPlugin {
             if (entries.isEmpty()) {
                 return "暂无银行存款排行数据";
             }
+            var playerNames = names.resolveAll(bot, event.getGroupId(), entries.stream().map(EconomyBankingService.LeaderboardEntry::userId).toList());
+            entries = entries.stream().map(entry -> new EconomyBankingService.LeaderboardEntry(entry.userId(),
+                    playerNames.get(entry.userId()), entry.registerGroupId(), entry.registerGroupName(), entry.balance())).toList();
             EconomyCommandSupport.sendForward(
                     bot,
                     event,

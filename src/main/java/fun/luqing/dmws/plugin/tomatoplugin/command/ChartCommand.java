@@ -8,9 +8,9 @@ import com.mikuac.shiro.core.Bot;
 import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookChartService;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
-import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookChartService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookListService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoSubscriptionGroupService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -29,7 +29,7 @@ public class ChartCommand {
     @GroupMessageHandler
     @MessageHandlerFilter(startWith = "获取更新图表")
     @Async("taskExecutor")
-    @CommandInfo(startWith = "获取更新图表", desc = "根据订阅ID获取书籍最近30天更新图表")
+    @CommandInfo(startWith = "获取更新图表", desc = "根据订阅ID获取书籍近一年更新图表")
     public void getBookUpdateChart(Bot bot, com.mikuac.shiro.dto.event.message.GroupMessageEvent event) {
         long groupId = event.getGroupId();
         String param = event.getMessage().replace("获取更新图表", "").trim();
@@ -64,6 +64,7 @@ public class ChartCommand {
                         .img(chartBytes)
                         .build(), false);
             } catch (Exception e) {
+                log.error("更新热力图生成或发送失败: groupId={} bookId={}", groupId, book.getBookId(), e);
                 TomatoMessageUtil.sendGroupMessage(bot, groupId, "生成图表失败：" + e.getMessage());
             }
         }, () -> TomatoMessageUtil.sendGroupMessage(bot, groupId, "未找到对应订阅。"));

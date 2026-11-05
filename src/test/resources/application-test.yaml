@@ -23,6 +23,8 @@ shiro:
       enable: false
 
 dmws:
+  economy:
+    condition-scheduler-enabled: false
   bot-id: 0
   bot-name: test
   master: []

@@ -30,6 +30,7 @@ public class EconomyFarmService {
     private final EconomyLedgerService ledgerService;
     private final EconomyFarmCropRepository cropRepository;
     private final EconomyFarmPlotRepository plotRepository;
+    private final EconomyConditionService conditions;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public List<PlotView> overview(long userId, String nickname) {
@@ -55,6 +56,7 @@ public class EconomyFarmService {
     ) {
         validatePlotIndex(plotIndex);
         profileService.getOrCreateForUpdate(userId, nickname);
+        conditions.requireAvailable(userId, nickname);
         ensurePlots(userId);
         EconomyFarmPlot plot = lockPlot(userId, plotIndex);
         if (plot.getCropCode() != null) {
@@ -63,9 +65,8 @@ public class EconomyFarmService {
 
         EconomyFarmCrop crop = resolveCrop(cropToken);
         operationService.start(operationId, "FARM_PLANT", userId, "种植 " + crop.getCode());
-        ledgerService.debitUser(
+        ledgerService.debitUserWithBankFallback(
                 userId,
-                EconomyAccountScope.WALLET,
                 EconomyMoney.positive(crop.getSeedPrice()),
                 operationId,
                 EconomyLedgerReason.FARM_SEED,
@@ -86,6 +87,7 @@ public class EconomyFarmService {
     public PlotView water(long userId, String nickname, int plotIndex) {
         validatePlotIndex(plotIndex);
         profileService.getOrCreateForUpdate(userId, nickname);
+        conditions.requireAvailable(userId, nickname);
         ensurePlots(userId);
         EconomyFarmPlot plot = lockPlot(userId, plotIndex);
         if (plot.getCropCode() == null) {
@@ -109,6 +111,7 @@ public class EconomyFarmService {
     public HarvestView harvest(long userId, String nickname, int plotIndex, String operationId) {
         validatePlotIndex(plotIndex);
         profileService.getOrCreateForUpdate(userId, nickname);
+        conditions.requireAvailable(userId, nickname);
         ensurePlots(userId);
         EconomyFarmPlot plot = lockPlot(userId, plotIndex);
         if (plot.getCropCode() == null || plot.getReadyAt() == null) {

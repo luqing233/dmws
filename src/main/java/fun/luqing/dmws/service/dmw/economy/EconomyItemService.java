@@ -29,6 +29,8 @@ public class EconomyItemService {
     private final EconomyUserProfileService profileService;
     private final EconomyLedgerService ledgerService;
     private final EconomyTitleService titleService;
+    private final EconomyEquipmentService equipment;
+    private final EconomyConditionService conditions;
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public List<EconomyItemDefinition> shop() {
@@ -41,7 +43,13 @@ public class EconomyItemService {
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
-    public void buy(long userId, String nickname, String itemCode, int quantity, String operationId) {
+    public PurchaseResult buy(
+            long userId,
+            String nickname,
+            String itemCode,
+            int quantity,
+            String operationId
+    ) {
         if (quantity <= 0 || quantity > 999) {
             throw new EconomyException("INVALID_QUANTITY", "购买数量必须在 1 到 999 之间");
         }
@@ -51,10 +59,14 @@ public class EconomyItemService {
 
         operationService.start(operationId, "SHOP_PURCHASE", userId, "购买道具 " + itemCode);
         profileService.getOrCreateForUpdate(userId, nickname);
+        if (item.getEffectType() == EconomyItemEffectType.BATON_CHARGER
+                && (quantity != 1 || userItemRepository.findByUserIdAndItemCode(userId, itemCode)
+                        .map(i -> i.getQuantity() > 0).orElse(false))) {
+            throw new EconomyException("CHARGER_ALREADY_OWNED", "充电器可重复使用，每人购买一个即可");
+        }
         BigDecimal total = EconomyMoney.positive(item.getPrice().multiply(BigDecimal.valueOf(quantity)));
-        ledgerService.debitUser(
+        EconomyLedgerService.BankFallbackDebit charge = ledgerService.debitUserWithBankFallback(
                 userId,
-                EconomyAccountScope.WALLET,
                 total,
                 operationId,
                 EconomyLedgerReason.SHOP_PURCHASE,
@@ -62,6 +74,15 @@ public class EconomyItemService {
                 "购买 " + item.getName() + " x" + quantity
         );
         addItem(userId, itemCode, quantity);
+        return new PurchaseResult(
+                item.getCode(),
+                item.getName(),
+                quantity,
+                total,
+                EconomyMoney.normalize(charge.bankTopUp()),
+                EconomyMoney.normalize(charge.charge().balance()),
+                EconomyMoney.normalize(charge.bankBalance())
+        );
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
@@ -72,17 +93,21 @@ public class EconomyItemService {
         EconomyItemDefinition definition = itemRepository.findById(itemCode)
                 .filter(EconomyItemDefinition::getEnabled)
                 .orElseThrow(() -> new EconomyException("ITEM_NOT_FOUND", "道具不存在"));
-        EconomyUserItem userItem = userItemRepository.findForUpdate(userId, itemCode)
-                .filter(item -> item.getQuantity() >= quantity)
-                .orElseThrow(() -> new EconomyException("ITEM_NOT_ENOUGH", "背包中的道具不足"));
-
         if (definition.getEffectType() == EconomyItemEffectType.SIGN_BONUS) {
             throw new EconomyException("PASSIVE_ITEM", "该道具会在签到时自动消耗，无需手动使用");
         }
 
+        // Reserve the request before stock checks so retrying a consumed last item
+        // still reports a duplicate. Match buy's profile-before-inventory lock order.
         operationService.start(operationId, "ITEM_USE", userId, "使用道具 " + itemCode);
         EconomyUserProfile profile = profileService.getOrCreateForUpdate(userId, nickname);
-        consume(userItem, quantity);
+        EconomyUserItem userItem = userItemRepository.findForUpdate(userId, itemCode)
+                .filter(item -> item.getQuantity() >= quantity)
+                .orElseThrow(() -> new EconomyException("ITEM_NOT_ENOUGH", "背包中的道具不足"));
+        boolean reusable = definition.getEffectType() == EconomyItemEffectType.ELECTRIC_BATON
+                || definition.getEffectType() == EconomyItemEffectType.BATON_CHARGER;
+        if (reusable && quantity != 1) throw new EconomyException("INVALID_QUANTITY", "可重复使用的装备每次操作一个即可");
+        if (!reusable) consume(userItem, quantity);
 
         return switch (definition.getEffectType()) {
             case MONEY -> {
@@ -121,15 +146,22 @@ public class EconomyItemService {
             }
             case ROB_BOOST -> {
                 profile.setRobBoostCharges(profile.getRobBoostCharges() + quantity);
-                yield "使用成功，下一次抢劫成功率提高 20%";
+                yield "使用成功，增加 " + quantity + " 次抢劫增益（剩余 " + profile.getRobBoostCharges() + " 次）；每次最终成功判定增加20个百分点，次数不叠加概率，反打或被捕也会消耗";
             }
             case FISHING_LUCK -> {
                 profile.setFishingLuckCharges(profile.getFishingLuckCharges() + quantity);
-                yield "使用成功，下一次钓鱼成功率提高 20%";
+                yield "使用成功，增加 " + quantity + " 次钓鱼增益（剩余 " + profile.getFishingLuckCharges() + " 次）；每次成功率增加20个百分点，次数不叠加概率";
             }
+            case ELECTRIC_BATON -> equipment.view(userId).text() + "\n抢劫时会自动使用，无需手动激活。";
+            case BATON_CHARGER -> equipment.startCharging(userId);
+            case CRIME_REDUCTION -> conditions.reduceCrime(userId, nickname, quantity);
             case NONE -> "使用成功，但它只是一件纪念品";
             case SIGN_BONUS -> throw new EconomyException("PASSIVE_ITEM", "该道具无需手动使用");
         };
+    }
+
+    public EconomyEquipmentService.EquipmentView equipment(long userId) {
+        return equipment.view(userId);
     }
 
     @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
@@ -167,15 +199,29 @@ public class EconomyItemService {
     }
 
     public EconomyItemDefinition resolve(String codeOrName) {
-        return itemRepository.findById(codeOrName)
-                .or(() -> itemRepository.findFirstByEnabledTrueAndName(codeOrName))
+        if ("电棍".equals(codeOrName)) codeOrName = "electric-baton";
+        if ("充电器".equals(codeOrName)) codeOrName = "electric-baton-charger";
+        final String query = codeOrName;
+        return itemRepository.findById(query)
+                .or(() -> itemRepository.findFirstByEnabledTrueAndName(query))
                 .filter(EconomyItemDefinition::getEnabled)
-                .orElseThrow(() -> new EconomyException("ITEM_NOT_FOUND", "道具不存在: " + codeOrName));
+                .orElseThrow(() -> new EconomyException("ITEM_NOT_FOUND", "道具不存在: " + query));
     }
 
     private void consume(EconomyUserItem item, int quantity) {
         item.setQuantity(item.getQuantity() - quantity);
         item.setUpdatedAt(LocalDateTime.now());
         userItemRepository.save(item);
+    }
+
+    public record PurchaseResult(
+            String itemCode,
+            String itemName,
+            int quantity,
+            BigDecimal totalCost,
+            BigDecimal bankTopUp,
+            BigDecimal walletBalance,
+            BigDecimal bankBalance
+    ) {
     }
 }

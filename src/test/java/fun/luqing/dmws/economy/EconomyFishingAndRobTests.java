@@ -66,7 +66,7 @@ class EconomyFishingAndRobTests {
     }
 
     @Test
-    void robbingAnEmptyAccountReturnsPoorTargetFeedbackWithoutFine() {
+    void robbingAnEmptyAccountReturnsPoorTargetFeedbackAndPossibleArrestFine() {
         long robber = 94003L;
         long target = 94004L;
         adminService.adjust(robber, robber, "robber", new BigDecimal("100"), true, "rob-seed");
@@ -74,9 +74,9 @@ class EconomyFishingAndRobTests {
         EconomyRobService.RobResult result = robService.rob(robber, "robber", target, "rob-action");
         assertFalse(result.success());
         assertTrue(result.poorTarget());
-        assertEquals(new BigDecimal("0.00"), result.fine());
+        assertEquals(new BigDecimal(result.caught() ? "50.00" : "0.00"), result.fine());
         assertEquals(
-                new BigDecimal("100.00"),
+                new BigDecimal("100.00").subtract(result.fine()),
                 ledgerService.balance(robber, EconomyAccountScope.WALLET).balance()
         );
         assertThrows(

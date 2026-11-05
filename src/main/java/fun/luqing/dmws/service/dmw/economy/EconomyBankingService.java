@@ -140,15 +140,16 @@ public class EconomyBankingService {
                 return "未知群聊";
             }
             String name = registerGroupName == null || registerGroupName.isBlank()
-                    ? "群聊"
+                    ? "未知群聊"
                     : registerGroupName;
-            return name + " (" + registerGroupId + ")";
+            return name;
         }
     }
 
     public record Balances(BigDecimal wallet, BigDecimal bank) {
         public String format() {
-            return "钱包: " + EconomyMoney.format(wallet) + "，银行: " + EconomyMoney.format(bank);
+            return "钱包: " + EconomyMoney.format(wallet) + "，银行: " + EconomyMoney.format(bank)
+                    + (bank.signum() < 0 ? "（医疗欠款，存入主银行可还款，不计息）" : "");
         }
     }
 }

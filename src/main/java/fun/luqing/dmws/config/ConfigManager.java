@@ -2,47 +2,29 @@ package fun.luqing.dmws.config;
 
 import com.mikuac.shiro.core.BotContainer;
 import fun.luqing.dmws.common.server.ImageFileServer;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
+import fun.luqing.dmws.common.server.ImageFileServerLifecycle;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-
+/** 兼容现有调用的配置门面；文件服务器生命周期由独立组件管理。 */
 @Component
-@Slf4j
 @Getter
 @RequiredArgsConstructor
 public class ConfigManager {
-
     private final BotContainer botContainer;
     private final DmwConfig dmwConfig;
+    private final ImageFileServerLifecycle fileServerLifecycle;
 
-    private ImageFileServer imageFileServer;
+    public ImageFileServer getImageFileServer() {
+        return fileServerLifecycle.getImageFileServer();
+    }
 
-    @PostConstruct
     public void initFileServer() {
-        startFileServer();
+        fileServerLifecycle.initFileServer();
     }
 
-    private void startFileServer() {
-        try {
-            int port = dmwConfig.getFileServerPort();
-            String host = dmwConfig.getFileServerHost();
-            imageFileServer = new ImageFileServer(host, port);
-            imageFileServer.start();
-        } catch (IOException e) {
-            log.error("图片文件服务器启动失败: {}", e.getMessage());
-        }
-    }
-
-    @PreDestroy
     public void destroy() {
-        if (imageFileServer != null) {
-            imageFileServer.stop();
-        }
+        fileServerLifecycle.destroy();
     }
-
 }

@@ -10,6 +10,7 @@ import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.config.DmwConfig;
 import fun.luqing.dmws.service.dmw.economy.EconomyAdminService;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class EconomyAdminPlugin {
 
     private final DmwConfig dmwConfig;
     private final EconomyAdminService adminService;
+    private final EconomyPlayerNameService names;
 
     @GroupMessageHandler
     @MessageHandlerFilter(startWith = {"发钱", "加钱"})
@@ -87,16 +89,17 @@ public class EconomyAdminPlugin {
                     credit ? "admin-credit" : "admin-debit",
                     event
             );
+            String targetName = names.resolve(bot, event.getGroupId(), target);
             BigDecimal balance = adminService.adjust(
                     event.getUserId(),
                     target,
-                    null,
+                    targetName,
                     amount,
                     credit,
                     operationId
             );
             return (credit ? "已增加 " : "已扣减 ") + EconomyMoney.format(amount)
-                    + "\n目标用户余额: " + EconomyMoney.format(balance);
+                    + "\n" + targetName + " 的余额: " + EconomyMoney.format(balance);
         });
     }
 }

@@ -26,12 +26,8 @@ public class EconomyOperationService {
             throw new DuplicateEconomyOperationException(operationId);
         }
         try {
-            operationRepository.saveAndFlush(EconomyOperation.create(
-                    operationId,
-                    type,
-                    actorId,
-                    description
-            ));
+            // INSERT must win the unique key. save/merge can update an existing assigned ID in a race.
+            operationRepository.reserve(operationId, type, actorId, description, java.time.LocalDateTime.now());
         } catch (DataIntegrityViolationException exception) {
             throw new DuplicateEconomyOperationException(operationId);
         }

@@ -10,9 +10,9 @@ import fun.luqing.dmws.client.TomatoApiClient;
 
 import fun.luqing.dmws.entity.dmw.tomato.TomatoBookList;
 import fun.luqing.dmws.entity.dmw.tomato.TomatoSubscriptionGroup;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookContentService;
-import fun.luqing.dmws.service.tomatoservice.TomatoBookListService;
-import fun.luqing.dmws.service.tomatoservice.TomatoSubscriptionGroupService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookContentService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoBookListService;
+import fun.luqing.dmws.service.dmw.tomato.TomatoSubscriptionGroupService;
 import fun.luqing.dmws.common.annotation.CommandInfo;
 import fun.luqing.dmws.plugin.tomatoplugin.util.TomatoMessageUtil;
 import lombok.RequiredArgsConstructor;

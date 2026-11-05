@@ -34,7 +34,7 @@ public class EconomyAdminService {
         );
         profileService.getOrCreateForUpdate(
                 targetUserId,
-                targetNickname == null ? String.valueOf(targetUserId) : targetNickname
+                targetNickname == null ? "" : targetNickname
         );
         if (credit) {
             return ledgerService.creditUser(

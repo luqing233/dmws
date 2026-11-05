@@ -3,6 +3,7 @@ package fun.luqing.dmws.plugin.economy;
 import fun.luqing.dmws.entity.dmw.economy.EconomyItemDefinition;
 import fun.luqing.dmws.enums.EconomyItemEffectType;
 import fun.luqing.dmws.service.dmw.economy.EconomyBankingService;
+import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
@@ -29,8 +30,9 @@ public final class EconomyDisplayFormatter {
 
         int rank = 1;
         for (EconomyBankingService.LeaderboardEntry entry : entries) {
+            String nickname = EconomyPlayerNameService.usable(entry.nickname(), entry.userId());
             nodes.add("第 " + rank + " 名"
-                    + "\n用户：" + entry.nickname()
+                    + "\n用户：" + (nickname.isBlank() ? "这位玩家" : nickname)
                     + "\n开户群：" + entry.groupDisplay()
                     + "\n主银行存款：" + money(entry.balance()) + " 金币");
             rank++;
@@ -76,11 +78,14 @@ public final class EconomyDisplayFormatter {
             return "使用后恢复最近一次断签的连续天数";
         }
         if (item.getEffectType() == EconomyItemEffectType.ROB_BOOST) {
-            return "使用后下一次抢劫成功率提高 20%";
+            return "一次最终成功判定 +20个百分点；次数累积、不叠加概率";
         }
         if (item.getEffectType() == EconomyItemEffectType.FISHING_LUCK) {
-            return "使用后下一次钓鱼成功率提高 20%";
+            return "一次钓鱼 +20个百分点；次数累积、不叠加概率";
         }
+        if (item.getEffectType() == EconomyItemEffectType.ELECTRIC_BATON) return "可重复使用，100电量，每次抢劫耗电20，最终成功判定+20个百分点";
+        if (item.getEffectType() == EconomyItemEffectType.BATON_CHARGER) return "可重复使用，每分钟充1电，每人同时充一根";
+        if (item.getEffectType() == EconomyItemEffectType.CRIME_REDUCTION) return "金盆洗手，一次清零全部犯罪值，每日最多2次";
         return "纪念收藏";
     }
 }
