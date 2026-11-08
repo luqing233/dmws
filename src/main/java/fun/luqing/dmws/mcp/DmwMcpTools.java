@@ -20,12 +20,16 @@ public class DmwMcpTools {
     private final EconomyMcpTools economyMcpTools;
     private final ForwardMcpTools forwardMcpTools;
     private final EconomyConditionMcpTools conditionMcpTools;
+    private final EconomyMarketMcpTools marketMcpTools;
 
     public ObjectNode execute(String tool, JsonNode args) {
         ObjectNode result = MAPPER.createObjectNode();
         ArrayNode content = result.putArray("content");
         try {
             switch (tool) {
+                case "dmw_economy_fx_market", "dmw_economy_fx_positions", "dmw_economy_fx_history",
+                     "dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay" ->
+                        addText(content, marketMcpTools.execute(tool, args));
                 case "dmw_economy_shop" -> addText(content, economyMcpTools.shop(args));
                 case "dmw_economy_balance" -> addText(content, economyMcpTools.balance(args));
                 case "dmw_economy_backpack" -> addText(content, economyMcpTools.backpack(args));

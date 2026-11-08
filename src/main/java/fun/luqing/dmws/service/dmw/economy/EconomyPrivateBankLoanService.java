@@ -34,8 +34,9 @@ public class EconomyPrivateBankLoanService {
     private final EconomyLedgerService ledgerService;
     private final EconomyPrivateBankRepository bankRepository;
     private final EconomyPrivateBankLoanRepository loanRepository;
+    private final fun.luqing.dmws.repository.dmw.economy.EconomyMarketPositionRepository marketPositions;
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public LoanView borrow(
             long userId,
             String nickname,
@@ -56,6 +57,11 @@ public class EconomyPrivateBankLoanService {
         }
         operationService.start(operationId, "PRIVATE_BANK_LOAN", userId, "私人银行借款");
         profileService.getOrCreateForUpdate(userId, nickname);
+        // Both FX writes and borrowing hold this profile lock. Read AFTER acquiring it, under READ_COMMITTED.
+        if (marketPositions.existsByUserIdAndStatus(userId, fun.luqing.dmws.entity.dmw.economy.EconomyMarketPosition.Status.OPEN)
+                || ledgerService.accountBalance(EconomyMarketService.debtKey(userId), EconomyAccountScope.PLUGIN).signum() > 0) {
+            throw new EconomyException("MARKET_CREDIT_RESTRICTED", "仍有外汇持仓或交易欠款，暂不能新增私人银行贷款；请先平仓并还清交易欠款");
+        }
         ledgerService.transferAccountToUser(
                 bank.getCapitalAccountKey(),
                 EconomyAccountScope.PLUGIN,

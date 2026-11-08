@@ -106,7 +106,7 @@ class EconomyConditionMcpToolsTests {
     @Test
     void routesConditionToolsAndMarksErrors() {
         var condition = mock(EconomyConditionMcpTools.class);
-        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), mock(EconomyMcpTools.class), mock(ForwardMcpTools.class), condition);
+        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), mock(EconomyMcpTools.class), mock(ForwardMcpTools.class), condition, mock(EconomyMarketMcpTools.class));
         var args = mapper.createObjectNode();
         when(condition.execute("dmw_economy_bail", args)).thenReturn(mapper.createObjectNode().put("ok", false).put("code", "BAIL_BAD_REPUTATION"));
         assertTrue(tools.execute("dmw_economy_bail", args).path("isError").asBoolean());

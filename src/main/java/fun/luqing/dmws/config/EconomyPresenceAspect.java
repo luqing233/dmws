@@ -20,7 +20,8 @@ public class EconomyPresenceAspect {
 
     private final EconomyUserProfileService profileService;
 
-    @Around("@annotation(groupMessageHandler) && execution(* fun.luqing.dmws.plugin.economy..*(..))")
+    @Around("@annotation(groupMessageHandler) && execution(* fun.luqing.dmws.plugin.economy..*(..))"
+            + " && !@annotation(fun.luqing.dmws.common.annotation.EconomyReadOnly)")
     public Object recordEconomyGroup(
             ProceedingJoinPoint joinPoint,
             GroupMessageHandler groupMessageHandler

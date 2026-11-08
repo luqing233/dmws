@@ -186,7 +186,7 @@ public class EconomyPrivateBankService {
         return view(bank);
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public LoanView borrow(
             long userId,
             String nickname,

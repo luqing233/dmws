@@ -32,5 +32,10 @@ public enum EconomyLedgerReason {
     BAIL_PAYMENT,
     FARM_SEED,
     FARM_HARVEST,
-    ADMIN_ADJUST
+    ADMIN_ADJUST,
+    MARKET_MARGIN,
+    MARKET_FEE,
+    MARKET_SETTLEMENT,
+    MARKET_DEBT,
+    MARKET_REPAY
 }

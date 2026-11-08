@@ -16,6 +16,23 @@ class Event:
 
 
 class GuardTests(unittest.TestCase):
+    def test_fx_writes_keep_trusted_context_and_independent_receipts(self):
+        event = Event()
+        first = {"pair": "EUR/USD", "side": "long"}
+        second = {"pair": "USD/JPY", "side": "short"}
+        start(event, "dmw_economy_fx_open", first, "s" * 64)
+        self.assertIn("_trusted_context", first)
+        finish(event, "dmw_economy_fx_open", first, self.result({"ok": True, "display_text": "开仓成功 #1"}))
+        start(event, "dmw_economy_fx_open", second, "s" * 64)
+        self.assertIn("开仓成功 #1", final_receipt(event))
+        self.assertIn("不能认定已经成功", final_receipt(event))
+        finish(event, "dmw_economy_fx_open", second, self.result({"ok": False, "message": "交易欠款未还清"}))
+        self.assertEqual(final_receipt(event), "开仓成功 #1\n\n本次操作未完成：交易欠款未还清")
+        for tool in ("dmw_economy_fx_close", "dmw_economy_fx_repay"):
+            args = {"position_id": 1}
+            start(event, tool, args, "s" * 64)
+            self.assertIn("_trusted_context", args)
+
     def result(self, payload, error=False):
         return SimpleNamespace(isError=error, content=[SimpleNamespace(text=json.dumps(payload, ensure_ascii=False))])
 

@@ -63,6 +63,19 @@ dmws:
     private-bank-max-loan-days: 30
     fishing-rod-price: 500
     fishing-cooldown-seconds: 30
+    # 模拟外汇：默认关闭；启用前执行 scripts/migrate_market.sql 并更新 AstrBot guard。
+    # enabled 仅为初始状态，主人可发送「开启交易/关闭交易」持久化覆盖。
+    # 关闭只禁止新开仓，行情、平仓和还款继续；accepting-opens=false 仍强制暂停新开仓。
+    market:
+      enabled: false
+      accepting-opens: true
+      scheduler-enabled: true
+      minimum-margin: 100
+      position-margin-limit: 5000
+      total-margin-limit: 20000
+      max-positions: 5
+      daily-open-limit: 20
+      net-issuance-budget: 1000000
     rob-cooldown-seconds: 300
     rob-fine: 50
     # 到期住院/监禁每15秒扫描；关闭后，状态查询与相关玩法仍会按需结算。

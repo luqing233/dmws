@@ -22,6 +22,31 @@ public final class EconomyDisplayFormatter {
     private EconomyDisplayFormatter() {
     }
 
+    public static List<String> backpack(List<String> items, String equipment, String bait) {
+        List<String> nodes = new ArrayList<>();
+        nodes.add("我的背包\n" + (items.isEmpty() ? "暂无完整道具" : "道具种类：" + items.size())
+                + "\n使用：使用 <道具编码或名称> [数量]");
+        for (int offset = 0; offset < items.size(); offset += 8) {
+            nodes.add("道具清单 " + (offset / 8 + 1) + "\n" + String.join("\n", items.subList(offset, Math.min(offset + 8, items.size()))));
+        }
+        addBackpackSection(nodes, equipment);
+        addBackpackSection(nodes, bait);
+        return List.copyOf(nodes);
+    }
+
+    private static void addBackpackSection(List<String> nodes, String text) {
+        if (text == null || text.isBlank()) return;
+        // Multiple owned batons can produce a long status: keep each forward node comfortably bounded.
+        while (text.length() > 1800) {
+            int split = text.lastIndexOf('\n', 1800);
+            if (split <= 0) split = 1800;
+            if (Character.isHighSurrogate(text.charAt(split - 1))) split--;
+            nodes.add(text.substring(0, split));
+            text = text.substring(split).stripLeading();
+        }
+        if (!text.isBlank()) nodes.add(text);
+    }
+
     public static List<String> leaderboard(List<EconomyBankingService.LeaderboardEntry> entries) {
         List<String> nodes = new ArrayList<>();
         nodes.add("主银行存款排行榜\n更新时间："

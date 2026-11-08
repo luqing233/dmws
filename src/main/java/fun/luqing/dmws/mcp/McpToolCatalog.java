@@ -250,6 +250,26 @@ public class McpToolCatalog {
                 objectSchema(List.of(), property("user_id", "integer", "QQ user ID; defaults to bot's own account"),
                         property("group_id", "integer", "Optional current group for group-card name resolution"),
                         property("as_bot", "boolean", "Query bot's own backpack; cannot combine true with user_id"))));
+        tools.add(tool("dmw_economy_fx_market", "Read the shared simulated FX market. Four pairs update every 10 minutes at :00/:10/:20/:30/:40/:50. These are game prices, not real exchange rates. fresh=false means trading is paused until a new tick; queries never advance prices.", objectSchema(List.of())));
+        tools.add(tool("dmw_economy_fx_positions", "Read open positions, floating PnL, trading debt and trading equity (excludes wallet/bank). Omit user_id for bot. Does not create players or settle positions.",
+                objectSchema(List.of(), property("user_id", "integer", "Account to query; defaults to bot"))));
+        tools.add(tool("dmw_economy_fx_history", "Read the latest 20 closed/liquidated positions and immutable settlement receipts. Omit user_id for bot.",
+                objectSchema(List.of(), property("user_id", "integer", "Account to query; defaults to bot"))));
+        ObjectNode fxOpen = objectSchema(List.of("group_id", "pair", "side", "margin", "leverage", "request_id"),
+                property("group_id", "integer", "Current group"), property("user_id", "integer", "Explicit requester, or omit for bot account"),
+                property("pair", "string", "EUR/USD, GBP/USD, USD/JPY or USD/CHF"), property("side", "string", "long or short"),
+                property("margin", "string", "Positive coin margin, at most two decimals; opening fee is charged in addition"),
+                property("leverage", "integer", "1..100"), property("request_id", "string", "Stable request ID"));
+        ((ObjectNode) fxOpen.path("properties").path("leverage")).put("minimum", 1).put("maximum", 100);
+        ((ObjectNode) fxOpen.path("properties").path("pair")).putArray("enum").add("EUR/USD").add("GBP/USD").add("USD/JPY").add("USD/CHF");
+        ((ObjectNode) fxOpen.path("properties").path("side")).putArray("enum").add("long").add("short");
+        tools.add(tool("dmw_economy_fx_open", "Open a long/short simulated FX position using existing game coins. Defaults to BOT, never master. Pass explicit user_id only for current requester. Fee=margin*leverage*(0.00005+leverage*0.000005), minimum0.01. Loss at80% of margin liquidates at the available simulated quote; gaps can exceed margin, debit wallet/main-bank positive funds and create separate trading debt. No borrowing to open. Debt blocks new positions. One source message permits at most ONE open per actor, regardless of pair/side/request_id. Changed parameters return OPERATION_CONFLICT instead of another trade. Never invent prices or silently retry uncertain writes; inspect positions first.", fxOpen));
+        tools.add(tool("dmw_economy_fx_close", "Close ONE owned position at the current server-generated quote. Defaults to bot. No additional close fee. Existing settlements are returned without another payment. Proceeds repay trading debt first. Never infer success from timeout.",
+                objectSchema(List.of("group_id", "position_id", "request_id"), property("group_id", "integer", "Current group"),
+                        property("user_id", "integer", "Explicit requester, or omit for bot"), property("position_id", "integer", "Positive owned position ID"), property("request_id", "string", "Stable request ID"))));
+        tools.add(tool("dmw_economy_fx_repay", "Repay separate trading debt with wallet/main-bank positive funds. amount=all repays the debt only if sufficient funds; otherwise no payment. Numeric amount is capped at outstanding debt. Never creates medical overdraft. Defaults to bot.",
+                objectSchema(List.of("group_id", "amount", "request_id"), property("group_id", "integer", "Current group"),
+                        property("user_id", "integer", "Explicit requester, or omit for bot"), property("amount", "string", "Positive amount with at most two decimals, or all"), property("request_id", "string", "Stable request ID"))));
         for (var entry : tools) {
             ObjectNode definition = (ObjectNode) entry;
             if (EconomyMcpContext.WRITES.contains(definition.path("name").asText())) {

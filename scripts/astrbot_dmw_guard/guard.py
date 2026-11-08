@@ -5,7 +5,8 @@ import hmac
 import json
 import time
 
-WRITES = {"dmw_economy_" + action for action in ("buy", "use_item", "transfer", "rob", "discharge", "bail")}
+WRITES = {"dmw_economy_" + action for action in (
+    "buy", "use_item", "transfer", "rob", "discharge", "bail", "fx_open", "fx_close", "fx_repay")}
 STATE_KEY = "dmw_economy_receipts_v1"
 
 
@@ -22,7 +23,8 @@ def sign_context(secret, tool, group_id, bot_id, sender_id, message_id, now=None
 def receipt_key(tool, args):
     # Repeated attempts at the same step replace its pending/error receipt, not other steps.
     return json.dumps([tool, args.get("user_id"), args.get("item"), args.get("target_user_id"),
-                       args.get("target_name"), args.get("confirm", False)], ensure_ascii=False)
+                       args.get("target_name"), args.get("confirm", False),
+                       args.get("pair"), args.get("side"), args.get("position_id")], ensure_ascii=False)
 
 
 def start(event, tool, args, secret):

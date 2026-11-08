@@ -32,25 +32,26 @@ public class EconomyInventoryPlugin {
     private final DmwConfig dmwConfig;
 
     @GroupMessageHandler
+    @fun.luqing.dmws.common.annotation.EconomyReadOnly
     @MessageHandlerFilter(cmd = "(?i)^(我的背包|背包|backpack)$")
     @CommandInfo(cmd = "我的背包", desc = "查看背包中的道具")
     public void backpack(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             List<EconomyUserItem> items = itemService.backpack(event.getUserId());
-            if (items.isEmpty()) return "背包无完整道具。\n"+itemService.baitStatus(event.getUserId());
-            StringBuilder builder = new StringBuilder("我的背包");
+            List<String> lines = new java.util.ArrayList<>();
             for (EconomyUserItem item : items) {
                 var definition=itemService.definition(item.getItemCode());
                 String name = definition.getName();
-                builder.append("\n- ").append(name)
-                        .append(" [").append(item.getItemCode()).append("]")
-                        .append(" ").append(item.getQuantity()).append(definition.getEffectType()==fun.luqing.dmws.enums.EconomyItemEffectType.FISHING_LUCK?"包":"个");
+                lines.add(name + " [" + item.getItemCode() + "] " + item.getQuantity()
+                        + (definition.getEffectType() == fun.luqing.dmws.enums.EconomyItemEffectType.FISHING_LUCK ? "包" : "个"));
             }
+            String equipment = "";
             if (items.stream().anyMatch(i -> i.getItemCode().equals("electric-baton"))) {
-                builder.append("\n\n").append(itemService.equipment(event.getUserId()).text());
+                equipment = itemService.equipment(event.getUserId()).text();
             }
-            builder.append("\n\n").append(itemService.baitStatus(event.getUserId()));
-            return builder.toString();
+            EconomyCommandSupport.sendForward(bot, event, dmwConfig,
+                    EconomyDisplayFormatter.backpack(lines, equipment, itemService.baitStatus(event.getUserId())));
+            return null;
         });
     }
 

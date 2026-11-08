@@ -12,7 +12,7 @@ class DmwMcpToolsTests {
     @Test
     void returnedPurchaseAndTransferFailuresAlwaysSetProtocolError() {
         var economy = mock(EconomyMcpTools.class);
-        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class));
+        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class), mock(EconomyMarketMcpTools.class));
         var args = mapper.createObjectNode();
         when(economy.buy(args)).thenReturn(mapper.createObjectNode().put("ok", false).put("code", "INSUFFICIENT_BALANCE").put("message", "余额不足"));
         when(economy.transfer(args)).thenReturn(mapper.createObjectNode().put("ok", false).put("code", "SAME_ACCOUNT").put("message", "不能给自己转账"));
@@ -28,7 +28,7 @@ class DmwMcpToolsTests {
         var tomato = mock(TomatoMcpTools.class);
         var economy = mock(EconomyMcpTools.class);
         var forward = mock(ForwardMcpTools.class);
-        var tools = new DmwMcpTools(tomato, economy, forward, mock(EconomyConditionMcpTools.class));
+        var tools = new DmwMcpTools(tomato, economy, forward, mock(EconomyConditionMcpTools.class), mock(EconomyMarketMcpTools.class));
         var args = mapper.createObjectNode();
         when(economy.shop(any())).thenReturn(mapper.createObjectNode().put("ok", true));
         assertTrue(tools.execute("dmw_economy_shop", args).path("content").get(0)
@@ -45,7 +45,7 @@ class DmwMcpToolsTests {
     void routesItemUseAndMarksBusinessFailuresAsMcpErrors() throws Exception {
         var economy = mock(EconomyMcpTools.class);
         var tomato = mock(TomatoMcpTools.class);
-        var tools = new DmwMcpTools(tomato, economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class));
+        var tools = new DmwMcpTools(tomato, economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class), mock(EconomyMarketMcpTools.class));
         var args = mapper.createObjectNode().put("item", "红牛");
         when(economy.useItem(args)).thenReturn(mapper.createObjectNode().put("ok", true).put("message", "使用成功"));
         assertFalse(tools.execute("dmw_economy_use_item", args).path("isError").asBoolean());
@@ -86,7 +86,7 @@ class DmwMcpToolsTests {
         assertTrue(robberyDescription.contains("+40 percentage points"));
         assertTrue(robberyDescription.contains("full60 minutes"));
         var economy = mock(EconomyMcpTools.class);
-        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class));
+        var tools = new DmwMcpTools(mock(TomatoMcpTools.class), economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class), mock(EconomyMarketMcpTools.class));
         var args = mapper.createObjectNode();
         when(economy.rob(args)).thenThrow(new fun.luqing.dmws.common.economy.EconomyException("IN_JAIL", "正在服刑"));
         var result = tools.execute("dmw_economy_rob", args);
@@ -97,7 +97,7 @@ class DmwMcpToolsTests {
     @Test
     void discardsPartialContentWhenAdapterFails() throws Exception {
         var tomato = mock(TomatoMcpTools.class);
-        var tools = new DmwMcpTools(tomato, mock(EconomyMcpTools.class), mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class));
+        var tools = new DmwMcpTools(tomato, mock(EconomyMcpTools.class), mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class), mock(EconomyMarketMcpTools.class));
         doThrow(new McpToolException("书籍不存在")).when(tomato).execute(anyString(), any(), any());
         var result = tools.execute("dmw_get_book", mapper.createObjectNode());
         assertTrue(result.path("isError").asBoolean());

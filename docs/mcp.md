@@ -185,3 +185,29 @@ rob_boost_used现在明确表示本次是否消耗红牛增益，electric_baton_
 无品质的“幸运鱼饵”名称默认白色；旧编码fishing-luck-bait指蓝色。原库存保留，旧激活次数只按原次数转移。
 使用鱼饵会启用对应包数×5次并设为默认品质；正常钓鱼也会自动拆包。钓鱼不另扣固定费用。
 本次不增加钓鱼写工具；原生支持“设置鱼饵 蓝”“当前鱼饵”“钓鱼 红”。HMAC身份、原消息去重及购买默认请求者规则保持。
+## 模拟外汇工具（本地新增，未部署）
+
+所有行情为服务器模拟，四个货币对 EUR/USD、GBP/USD、USD/JPY、USD/CHF 每10分钟统一更新。
+`fresh=false`表示当前时段没有可用新行情，开仓/平仓暂停；查询不生成行情。游戏规则见[economy.md](economy.md)。
+
+| 工具 | 参数 | 返回data |
+|---|---|---|
+| `dmw_economy_fx_market` | 无 | `source=SIMULATED, interval_minutes=10, sequence, quoted_at, fresh, pairs`；pairs含`pair,name,price,change`，change为本轮收益比例 |
+| `dmw_economy_fx_positions` | 可选`user_id`，省略用bot | `user_id,quoted_at,fresh,margin,floating_pnl,trading_debt,trading_equity,positions` |
+| `dmw_economy_fx_history` | 可选`user_id`，省略用bot | `user_id,records`，最近20笔结算 |
+| `dmw_economy_fx_open` | `group_id,pair,side,margin,leverage,request_id`；可选`user_id` | `position_id,amount,trading_debt`；amount为本次保证金+手续费 |
+| `dmw_economy_fx_close` | `group_id,position_id,request_id`；可选`user_id` | `position_id,amount,trading_debt`；amount为返还钱包金额 |
+| `dmw_economy_fx_repay` | `group_id,amount,request_id`；可选`user_id` | `amount,trading_debt`；amount为实际还款金额 |
+
+写入默认actor为bot，只有明确替当前请求人操作时才传可信消息对应的`user_id`，不能使用master或其他群员。
+`side`只能为`long/short`；`leverage`为1～100整数；`margin`为最多两位小数的正数字符串；还款`amount`还支持`all`。
+读结果中的资金、价格、盈亏和涨跌比例均为十进制字符串。仓位字段：`position_id,pair,side,status,margin,leverage,notional,opening_fee,entry_price,current_price,pnl,net_profit,opened_at,closed_at,close_receipt`。
+`status`为`open/closed/liquidated`；`net_profit=pnl-opening_fee`。历史记录`current_price`是平仓价，历史close_receipt不重算。
+`trading_equity`不含钱包和银行；交易欠款与医疗欠款分开，不得把负债账户余额说成可花金币。
+
+三项写工具都必须经`EconomyMcpContext`验证HMAC，由`scripts/astrbot_dmw_guard`注入真实消息来源。
+原生和MCP共用`fx-open`（空detail，每条来源消息每个操作者最多开一仓）、`fx-close`（仓位编号）、`fx-repay`（空detail）的原消息幂等键。
+改变request_id、货币对或方向不能重复利用同一来源消息开仓。操作号命中但规范化业务参数不同返回`OPERATION_CONFLICT`，不会把旧回执说成新参数成功。
+不接受模型价格、种子或另一个人的仓位。成功直接使用`display_text`；失败不改写成成功，超时先查询持仓/记录，不盲目重试。
+同消息同参数重复写返回已保存动作回执，不代表又执行一次；另一个请求关闭已结算仓位返回明确的“未重复收付”，本次`amount=0`。
+常见错误：`MARKET_DISABLED, MARKET_NOT_READY, MARKET_STALE, MARKET_OPEN_PAUSED, MARKET_DEBT_OUTSTANDING, MARKET_POSITION_LIMIT, MARKET_DAILY_LIMIT, INVALID_PAIR, INVALID_MARGIN, INVALID_LEVERAGE, POSITION_NOT_FOUND, NO_MARKET_DEBT, INSUFFICIENT_BALANCE`。
