@@ -21,7 +21,7 @@
 
 ## 账户
 
-### 模拟外汇交易（本地实现，未部署）
+### 模拟外汇交易（已部署，交易保持关闭）
 
 玩法参考 [FX 简单!](https://www.bilibili.com/toy/fx-simple/index.html) 的保证金、多空和杠杆机制。
 本模块采用**服务器统一模拟行情**，不是每日申购的外汇基金，也不接入 Frankfurter 实时报价或历史回放。
@@ -83,8 +83,8 @@
 
 新增表：`economy_market_state`（序号/净投放/手续费）、`economy_market_quote`（不可变历史价格）、
 `economy_market_position`（逐笔开平仓及费用/欠款快照）、`economy_market_receipt`（重复请求回执）。
-迁移文件为 `scripts/migrate_market.sql`，只创建新表并保留、扩展旧账本reason枚举；未执行生产迁移。
-`dmws.economy.market.enabled`默认false。将来部署新Jar前，即使暂不开玩法，也需要先建立表以通过JPA validate；
+迁移文件为 `scripts/migrate_market.sql`，只创建新表并保留、扩展旧账本reason枚举；已执行生产迁移。
+`dmws.economy.market.enabled`默认false。部署新Jar前，即使暂不开玩法，也需要先建立表以通过JPA validate；
 启用MCP写入前必须同步AstrBot guard。暂停新仓可发送「关闭交易」或使用`accepting-opens`，不要用停止行情代替。
 
 接口和字段见 [MCP文档](mcp.md)。当前仅本地实现与测试，不代表已发布。
@@ -698,3 +698,16 @@ Jar SHA-256：`3af5865e4cca5aef3f092ec285b7aff387d3828b6b3669d9ba47b3c7305b6732`
 上线后health/readiness/liveness均UP，账本差额0，OneBot已连接，AstrBot两个MCP均成功初始化。
 29项MCP工具、六档鱼饵价格及精简文案、普通与钓鱼商店分离均经只读查询核验。
 80种鱼（18种彩蛋）、13种事件保持；新进程无应用错误，未发送QQ测试消息或对真实玩家执行玩法测试。
+
+### 模拟外汇与背包合并转发部署（2026-11-09）
+
+2026-11-09 02:27:55（Asia/Shanghai）部署完成，功能提交 `afcd6ec`。
+Jar SHA-256：`f224f81dff0fb77a7c542ef9a0f46a5f577f95aabeea9529e3aa9fe23c024d47`。
+停写备份：`/root/dmws-backups/market-20261109022518`。
+275项Java测试、53项Python测试通过；真实MySQL恢复副本通过JPA validate、重复迁移、
+管理员开关、关闭后拒绝新仓/允许平仓及重复结算回执验证。
+46张原表精确恢复，生产迁移及隔离启动后原字段/原记录保持一致，账本差额0。
+上线后health/readiness/liveness均UP，OneBot在线，AstrBot两个MCP均初始化成功，
+35项工具包含6项外汇工具，经济保护插件已同步；未向QQ群发送测试消息，未对真实玩家执行玩法测试。
+按用户要求，生产配置 `market.enabled=false` 且持久化 `trading_enabled=false`，交易保持关闭，仓位数0。
+以后机器人主人可发送「开启交易」开放新仓；背包合并转发已随本次版本上线。
