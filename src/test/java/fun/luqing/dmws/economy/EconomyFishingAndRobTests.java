@@ -36,16 +36,19 @@ class EconomyFishingAndRobTests {
     @Autowired
     private EconomyRobService robService;
 
+    @Autowired fun.luqing.dmws.service.dmw.economy.EconomyItemService items;
+
     @Test
     void fishingChargesOnceAndEnforcesCooldown() {
         long userId = 94001L;
         adminService.adjust(userId, userId, "fisher", new BigDecimal("1000"), true, "fishing-seed");
         fishingService.buyRod(userId, "fisher", "fishing-rod-buy");
+        items.addItem(userId,"fishing-bait-white",1);
 
         EconomyFishingService.FishingResult result =
                 fishingService.fish(userId, "fisher", "fishing-action");
-        assertEquals(new BigDecimal("20.00"), result.cost());
-        assertTrue(result.walletBalance().compareTo(new BigDecimal("480.00")) >= 0);
+        assertEquals(new BigDecimal("0.00"), result.cost());
+        assertTrue(result.walletBalance().compareTo(new BigDecimal("500.00")) >= 0);
         assertThrows(
                 EconomyException.class,
                 () -> fishingService.fish(userId, "fisher", "fishing-action-2")

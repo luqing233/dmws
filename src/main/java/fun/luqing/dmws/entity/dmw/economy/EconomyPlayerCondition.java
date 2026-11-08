@@ -19,6 +19,7 @@ public class EconomyPlayerCondition {
     private int crime = 0;
     @Column(name = "crime_decay_on")
     private LocalDate crimeDecayOn;
+    private LocalDateTime crimeDecayAt;
     @Column(name = "crime_relief_on")
     private LocalDate crimeReliefOn;
     @Column(name = "crime_relief_used", nullable = false, columnDefinition = "int default 0")

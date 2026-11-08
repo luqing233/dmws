@@ -78,10 +78,10 @@ public final class EconomyDisplayFormatter {
             return "使用后恢复最近一次断签的连续天数";
         }
         if (item.getEffectType() == EconomyItemEffectType.ROB_BOOST) {
-            return "一次最终成功判定 +20个百分点；次数累积、不叠加概率";
+            return "一次战斗 +20个百分点；同种仅一次，可与电棍叠加";
         }
         if (item.getEffectType() == EconomyItemEffectType.FISHING_LUCK) {
-            return "一次钓鱼 +20个百分点；次数累积、不叠加概率";
+            return "每包5次，按品质提供效果；每次只用一种鱼饵";
         }
         if (item.getEffectType() == EconomyItemEffectType.ELECTRIC_BATON) return "可重复使用，100电量，每次抢劫耗电20，最终成功判定+20个百分点";
         if (item.getEffectType() == EconomyItemEffectType.BATON_CHARGER) return "可重复使用，每分钟充1电，每人同时充一根";

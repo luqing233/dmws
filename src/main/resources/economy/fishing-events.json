@@ -1,0 +1,118 @@
+[
+  {
+    "code": "boots",
+    "name": "靴子",
+    "description": "赏金猎人的靴子，另一只的主人似乎正在找你。",
+    "kind": "FINE",
+    "tickets": 120,
+    "penalty": 10
+  },
+  {
+    "code": "dead-fish",
+    "name": "死鱼",
+    "description": "鱼是钓到了，可惜它已经提前结束了今天的活动。",
+    "kind": "FINE",
+    "tickets": 80,
+    "penalty": 30
+  },
+  {
+    "code": "snag",
+    "name": "挂底",
+    "description": "你和河底进行了势均力敌的较量，最后损失了一套鱼线。",
+    "kind": "FINE",
+    "tickets": 60,
+    "penalty": 50
+  },
+  {
+    "code": "exam",
+    "name": "五年高考三年模拟",
+    "description": "湿透的卷子上，最后一道大题居然还没写完。",
+    "kind": "FINE",
+    "tickets": 30,
+    "penalty": 80
+  },
+  {
+    "code": "salamander",
+    "name": "娃娃鱼",
+    "description": "这位不能带走，赶紧放生。",
+    "kind": "FINE",
+    "tickets": 10,
+    "penalty": 120
+  },
+  {
+    "code": "corpse",
+    "name": "尸体",
+    "description": "鱼钩挂住了一具尸体，警察已经赶到现场。",
+    "kind": "JAIL",
+    "tickets": 20,
+    "penalty": 0
+  },
+  {
+    "code": "crocodile",
+    "name": "尼罗鳄",
+    "description": "地面属于尼罗鳄!",
+    "kind": "CROCODILE",
+    "tickets": 80,
+    "penalty": 0
+  },
+  {
+    "code": "bottle",
+    "name": "漂流瓶",
+    "description": "纸条写着：“别钓了，鱼都下班了。”瓶底似乎还有东西。",
+    "kind": "FUN",
+    "tickets": 5,
+    "penalty": 0,
+    "reward_min": 20,
+    "reward_max": 60
+  },
+  {
+    "code": "parcel",
+    "name": "神秘包裹",
+    "description": "包裹上写着：献给今天最有耐心的钓鱼人。",
+    "kind": "FUN",
+    "tickets": 3,
+    "penalty": 0,
+    "reward_min": 40,
+    "reward_max": 100
+  },
+  {
+    "code": "note",
+    "name": "钓鱼佬的留言",
+    "description": "“这里没有鱼。”留言背面贴着一点路费。",
+    "kind": "FUN",
+    "tickets": 2,
+    "penalty": 0,
+    "reward_min": 10,
+    "reward_max": 30
+  },
+  {
+    "code": "money-bag",
+    "name": "遗失的钱袋",
+    "description": "一只沉甸甸的钱袋，钱币的响声比鱼扑腾还好听。",
+    "kind": "REWARD",
+    "tickets": 6,
+    "penalty": 0,
+    "reward_min": 100,
+    "reward_max": 300
+  },
+  {
+    "code": "chest",
+    "name": "小宝箱",
+    "description": "锈迹斑斑的锁扣下，藏着一份意外之喜。",
+    "kind": "REWARD",
+    "tickets": 3,
+    "penalty": 0,
+    "reward_min": 200,
+    "reward_max": 800
+  },
+  {
+    "code": "bounty",
+    "name": "悬赏物品",
+    "description": "你找到了失主悬赏寻找的物品，奖金已经送达。",
+    "kind": "REWARD",
+    "tickets": 1,
+    "penalty": 0,
+    "reward_min": 800,
+    "reward_max": 2000
+  }
+]

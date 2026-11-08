@@ -396,7 +396,8 @@ class EconomyServiceIntegrationTests {
         assertEquals(0, profile.getRobBoostCharges());
         assertEquals(100, itemService.equipment(userId).batons().getFirst().energy());
         assertEquals(1, itemService.backpack(userId).stream().filter(i -> i.getItemCode().equals("electric-baton")).findFirst().orElseThrow().getQuantity());
-        assertEquals(1, profile.getFishingLuckCharges());
+        assertEquals(0, profile.getFishingLuckCharges());
+        assertTrue(itemService.baitStatus(userId).contains("已启用余5次"));
     }
 
     @Test

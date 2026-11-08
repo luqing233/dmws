@@ -24,6 +24,16 @@ class EconomyCommandCompatibilityTests {
         verify(items).buy(eq(10001L),anyString(),eq("fishing-luck-bait"),eq(20),eq(EconomyCommandSupport.operationId("item-buy",event,"fishing-luck-bait")));
     }
 
+    @Test void baitQualityAndPackageQuantityAreParsedTogether() {
+        var items=mock(EconomyItemService.class);var bot=mock(Bot.class);
+        var event=new GroupMessageEvent();event.setUserId(10001L);event.setGroupId(30001L);event.setMessageId(9);event.setPlainText("购买 幸运鱼饵 红 3");
+        var item=new EconomyItemDefinition();item.setCode("fishing-bait-red");item.setName("幸运鱼饵（红）");item.setPrice(new BigDecimal("400"));
+        when(items.resolve("幸运鱼饵红")).thenReturn(item);
+        when(items.buy(eq(10001L),anyString(),eq(item.getCode()),eq(3),anyString())).thenReturn(new EconomyItemService.PurchaseResult(item.getCode(),item.getName(),3,new BigDecimal("1200"),BigDecimal.ZERO,BigDecimal.ZERO,BigDecimal.ZERO));
+        new EconomyInventoryPlugin(items,mock(EconomyTitleService.class),new DmwConfig()).buy(bot,event);
+        verify(items).buy(eq(10001L),anyString(),eq(item.getCode()),eq(3),anyString());
+    }
+
     @Test void ownedDelistedTitleCanBeActivatedByItsDisplayedCode() {
         var items = mock(EconomyItemService.class); var titles = mock(EconomyTitleService.class); var bot = mock(Bot.class);
         var event = new GroupMessageEvent(); event.setUserId(10001L); event.setGroupId(30001L); event.setMessageId(2);

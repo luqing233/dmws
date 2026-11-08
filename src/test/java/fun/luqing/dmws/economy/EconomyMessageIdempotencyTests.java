@@ -46,7 +46,7 @@ class EconomyMessageIdempotencyTests {
             for (var future : futures) if (future.get(30, TimeUnit.SECONDS)) successes++;
             assertEquals(1, successes);
         }
-        assertEquals(new BigDecimal("9700.00"), ledger.balance(owner, EconomyAccountScope.WALLET).balance());
+        assertEquals(new BigDecimal("9925.00"), ledger.balance(owner, EconomyAccountScope.WALLET).balance());
         assertEquals(1, items.backpack(owner).stream().filter(i -> i.getItemCode().equals("fishing-luck-bait")).findFirst().orElseThrow().getQuantity());
         assertEquals(1, ledger.recentEntries(owner, EconomyAccountScope.WALLET, 100).stream().filter(e -> e.getOperationId().equals(nativeId)).count());
         assertThrows(DuplicateEconomyOperationException.class, () -> items.buy(owner, "并发测试", "fishing-luck-bait", 20, mcpId));

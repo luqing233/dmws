@@ -131,7 +131,7 @@ public class McpToolCatalog {
                         + "The robber may be counterattacked into hospital or jailed; attacking an empty wallet may injure the victim. Inspect injury, injured_user_id, hospital_until, jail_until and crime. "
                         + "Hospitalized/jailed players cannot rob or be robbed; use dmw_economy_status for status and fee quotes. "
                         + "Use display_text for a humorous human reply. Never disclose target_balance_after or wallet_balance in chat; these are legacy machine fields. "
-                        + "An owned electric baton with at least 20/100 energy automatically spends20, stays in inventory, and takes priority over queued boosts without stacking. Inspect electric_baton_used/electric_baton_energy. Charging batons with at least20 energy settle accrued charge, stop charging and spend20; below20 they keep charging. Empty-wallet attempts spend neither baton energy nor queued boosts and do not interrupt charging. "
+                        + "An owned electric baton with at least 20/100 energy automatically spends20, stays in inventory, and can stack with one red-bull charge for +40 percentage points total; each kind is used at most once per attempt. Inspect electric_baton_used/electric_baton_energy; rob_boost_used identifies red-bull consumption. Combat strength affects success/counterattack; police probability grows with crime, and crime naturally drops5 per full60 minutes to0. Charging batons with at least20 energy settle accrued charge, stop charging and spend20; below20 they keep charging. Empty-wallet attempts spend neither baton energy nor queued boosts and do not interrupt charging. "
                         + "Do not show raw injured QQ IDs or ISO timestamps/nanoseconds; hospital_until is the 24-hour forced-discharge deadline, not an early automatic recovery time. A unique exact target name or an explicit "
                         + "group member target_user_id executes directly. Ambiguous or fuzzy matches "
                         + "return candidates without executing; retry with target_user_id and "
@@ -236,8 +236,8 @@ public class McpToolCatalog {
                 "Read background update OR subscription job status. Pass the exact returned job_id, including sub- prefix. For a completed subscription, subscription_id is the receipt and data_job_id tracks chapter backfill. Queued/running is not subscription success. Status: queued, running, completed, partial, failed. "
                         + "done=true means finished; partial means some chapters failed. Records are in memory, last 100 jobs, cleared on restart.",
                 objectSchema(List.of("job_id"), property("job_id", "string", "Job ID returned by dmw_update_book"))));
-        tools.add(tool("dmw_economy_shop", "List enabled shop items with codes, names, descriptions, effect_type, manual_usable and exact decimal prices. Read-only, no QQ connection needed.",
-                objectSchema(List.of())));
+        tools.add(tool("dmw_economy_shop", "List shop items with codes, names, descriptions, effect_type, manual_usable and exact decimal prices. category defaults to general (excludes bait); fishing lists six lucky bait qualities, each package gives five casts. Returns category and count. Native 钓鱼商店 also shows rod purchase/upgrade. Read-only, no QQ connection needed.",
+                objectSchema(List.of(), property("category", "string", "general or fishing; defaults to general"))));
         tools.add(tool("dmw_economy_balance", "Read wallet and main-bank balances as exact decimal strings. No QQ connection needed. "
                 + "Omit user_id for the bot's own account; pass the requesting user's ID to query that user. "
                 + "Use as_bot=true without user_id to query the bot's own account instead. Bot identity needs dmws.bot-id or one connected bot.",

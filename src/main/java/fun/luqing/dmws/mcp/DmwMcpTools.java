@@ -26,7 +26,7 @@ public class DmwMcpTools {
         ArrayNode content = result.putArray("content");
         try {
             switch (tool) {
-                case "dmw_economy_shop" -> addText(content, economyMcpTools.shop());
+                case "dmw_economy_shop" -> addText(content, economyMcpTools.shop(args));
                 case "dmw_economy_balance" -> addText(content, economyMcpTools.balance(args));
                 case "dmw_economy_backpack" -> addText(content, economyMcpTools.backpack(args));
                 case "dmw_send_forward_message" -> addText(content, forwardMcpTools.send(args));

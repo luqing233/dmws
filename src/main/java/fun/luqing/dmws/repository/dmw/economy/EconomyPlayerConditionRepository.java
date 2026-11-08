@@ -14,6 +14,6 @@ public interface EconomyPlayerConditionRepository extends JpaRepository<EconomyP
     @Query("select s from EconomyPlayerCondition s where s.userId = :id")
     Optional<EconomyPlayerCondition> findForUpdate(@Param("id") long id);
 
-    @Query("select s.userId from EconomyPlayerCondition s where s.hospitalUntil <= :now or s.jailUntil <= :now order by s.userId")
-    List<Long> findDue(@Param("now") LocalDateTime now, Pageable page);
+    @Query("select s.userId from EconomyPlayerCondition s where s.hospitalUntil <= :now or s.jailUntil <= :now or (s.crime > 0 and (s.crimeDecayAt is null or s.crimeDecayAt <= :decayBefore)) order by s.userId")
+    List<Long> findDue(@Param("now") LocalDateTime now, @Param("decayBefore") LocalDateTime decayBefore, Pageable page);
 }

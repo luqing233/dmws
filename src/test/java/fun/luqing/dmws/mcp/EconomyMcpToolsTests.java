@@ -47,6 +47,9 @@ class EconomyMcpToolsTests {
         item.setPrice(new BigDecimal("100.25"));
         when(itemService.shop()).thenReturn(List.of(item));
         assertEquals("100.25", tools.shop().path("items").get(0).path("unit_price").asText());
+        when(itemService.fishingShop()).thenReturn(List.of(item));
+        assertEquals("fishing",tools.shop(MAPPER.createObjectNode().put("category","fishing")).path("category").asText());
+        verify(itemService).fishingShop();
         when(bankingService.balances(10001L)).thenReturn(new EconomyBankingService.Balances(
                 new BigDecimal("1.25"), new BigDecimal("2.50")));
         assertEquals("3.75", tools.balance(MAPPER.createObjectNode()).path("total").asText());

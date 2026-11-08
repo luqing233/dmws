@@ -19,7 +19,7 @@ public class EconomyConditionScheduler {
 
     @Scheduled(fixedDelay = 15000, initialDelay = 60000)
     public void settleExpired() {
-        for (long id : repository.findDue(time.now(), PageRequest.of(0, 200))) {
+        for (long id : repository.findDue(time.now(), time.now().minusHours(1), PageRequest.of(0, 200))) {
             try { conditions.settleUser(id); }
             catch (RuntimeException e) { log.error("住院/服刑到期结算失败，将重试: userId={}", id, e); }
         }

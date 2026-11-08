@@ -29,6 +29,7 @@ public class EconomyRobService {
     private final EconomyGameTime time;
     private final EconomyRobRandom random;
     private final EconomyEquipmentService equipment;
+    private final EconomyCombatService combat;
 
     @Transactional(transactionManager = "dmwTransactionManager")
     public RobResult rob(long robberId, String robberNickname, long targetId, String operationId) {
@@ -52,7 +53,7 @@ public class EconomyRobService {
         boolean poor = targetBefore.signum() <= 0;
         Integer batonEnergy = poor ? null : equipment.useForRobbery(robberId);
         boolean batonUsed = batonEnergy != null;
-        boolean legacyBoost = !poor && !batonUsed && profile.getRobBoostCharges() > 0;
+        boolean legacyBoost = !poor && profile.getRobBoostCharges() > 0;
         boolean boosted = batonUsed || legacyBoost;
         if (legacyBoost) profile.setRobBoostCharges(profile.getRobBoostCharges() - 1);
         boolean success = false, caught = false, resisted = false, assaulted = false;
@@ -60,7 +61,7 @@ public class EconomyRobService {
         int injury = 0;
         LocalDateTime hospitalUntil = null;
         BigDecimal stolen = EconomyMoney.zero(), fine = EconomyMoney.zero();
-        double policeChance = Math.min(0.75, rules.getPoliceChance() + robber.getCrime() * 0.0025);
+        double policeChance = EconomyCombatService.policeChance(rules.getPoliceChance(), robber.getCrime());
 
         if (poor) {
             assaulted = random.chance(rules.getPoorAssaultChance());
@@ -71,8 +72,8 @@ public class EconomyRobService {
                 injuredUser = targetId;
                 hospitalUntil = target.getHospitalUntil();
             }
-            caught = random.chance(Math.min(0.75, rules.getPoliceChance() + robber.getCrime() * 0.0025));
-        } else if (random.chance(rules.getCounterChance())) {
+            caught = random.chance(EconomyCombatService.policeChance(rules.getPoliceChance(), robber.getCrime()));
+        } else if (random.chance(Math.max(0.05, Math.min(0.60, rules.getCounterChance() + (combat.strength(targetId)-combat.strength(robberId))*0.003)))) {
             resisted = true;
             injury = random.injury();
             conditions.admit(robber, injury);
@@ -80,7 +81,7 @@ public class EconomyRobService {
             hospitalUntil = robber.getHospitalUntil();
         } else if (random.chance(policeChance)) {
             caught = true;
-        } else if (random.chance(Math.min(1, rules.getSuccessChance() + (boosted ? 0.20 : 0)))) {
+        } else if (random.chance(EconomyCombatService.winChance(combat.strength(robberId), combat.strength(targetId), rules.getSuccessChance(), (batonUsed ? 0.20 : 0) + (legacyBoost ? 0.20 : 0), 0.10, 0.90))) {
             BigDecimal rate = rules.getMinStealRate().add(rules.getMaxStealRate().subtract(rules.getMinStealRate())
                     .multiply(BigDecimal.valueOf(random.fraction())));
             stolen = targetBefore.multiply(rate).min(rules.getMaxStolen()).min(new BigDecimal("5000"))
@@ -89,6 +90,7 @@ public class EconomyRobService {
                 ledgerService.transferUser(targetId, EconomyAccountScope.WALLET, robberId, EconomyAccountScope.WALLET,
                         stolen, operationId, EconomyLedgerReason.ROB_REWARD, robberId, "抢劫用户 " + targetId);
                 success = true;
+                combat.victory(robberId, "player-" + targetId);
                 conditions.addCrime(robber, rules.getCrimePerSuccess());
             }
         }
@@ -111,7 +113,7 @@ public class EconomyRobService {
         record.setCrimeAfter(robber.getCrime());
         record.setOperationId(operationId);
         recordRepository.save(record);
-        return new RobResult(success, poor, caught, resisted, boosted, targetId, stolen, fine,
+        return new RobResult(success, poor, caught, resisted, legacyBoost, targetId, stolen, fine,
                 ledgerService.balance(targetId, EconomyAccountScope.WALLET).balance(),
                 ledgerService.balance(robberId, EconomyAccountScope.WALLET).balance(), assaulted, injuredUser,
                 injury, hospitalUntil, robber.getJailUntil(), robber.getCrime(), batonUsed, batonEnergy);

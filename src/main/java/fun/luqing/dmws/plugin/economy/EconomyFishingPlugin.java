@@ -24,17 +24,19 @@ public class EconomyFishingPlugin {
 
     private final EconomyFishingService fishingService;
     private final EconomyPlayerNameService names;
+    private final fun.luqing.dmws.config.DmwConfig config;
+    private final fun.luqing.dmws.service.dmw.economy.EconomyCombatService combat;
 
     @GroupMessageHandler
-    @MessageHandlerFilter(cmd = "^(钓鱼|抛竿|fish)$")
+    @MessageHandlerFilter(cmd = "^(钓鱼|抛竿|fish)(\\s+[白绿蓝紫金红]色?)?$")
     @CommandInfo(cmd = "钓鱼", desc = "按鱼种、实际尺寸和鱼竿等级结算收入，显示描述与净收益")
     public void fish(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
-            EconomyFishingService.FishingResult result = fishingService.fish(
-                    event.getUserId(),
-                    EconomyCommandSupport.nickname(event),
-                    EconomyCommandSupport.operationId("fishing", event)
-            );
+            String[] parts=EconomyCommandSupport.plainText(event).split("\\s+");
+            String operation=EconomyCommandSupport.operationId("fishing",event);
+            String group=EconomyCommandSupport.groupName(bot,event.getGroupId());
+            var result=parts.length==1?fishingService.fish(event.getUserId(),EconomyCommandSupport.nickname(event),operation,event.getGroupId(),group)
+                    :fishingService.fish(event.getUserId(),EconomyCommandSupport.nickname(event),operation,event.getGroupId(),group,parts[1]);
             return fun.luqing.dmws.service.dmw.economy.EconomyFishingText.receipt(result);
         });
     }
@@ -79,7 +81,7 @@ public class EconomyFishingPlugin {
     }
 
     @GroupMessageHandler
-    @MessageHandlerFilter(cmd = "^(钓鱼记录|鱼类图鉴|钓鱼信息)$")
+    @MessageHandlerFilter(cmd = "^(钓鱼记录|钓鱼信息)$")
     @CommandInfo(cmd = "钓鱼信息", desc = "查看最近钓到的鱼")
     public void history(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
@@ -98,8 +100,30 @@ public class EconomyFishingPlugin {
     }
 
     @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^(鱼类图鉴|鱼种列表)(\\s+[0-9]+)?$")
+    @CommandInfo(cmd = "鱼类图鉴", desc = "查看数据库鱼种、彩蛋和解锁情况；可加页码")
+    public void catalog(Bot bot, GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot, event, () -> {
+            String[] parts = EconomyCommandSupport.plainText(event).split("\\s+");
+            int page = 1;
+            if (parts.length > 1) {
+                try { page = Integer.parseInt(parts[1]); }
+                catch (NumberFormatException exception) { return "图鉴页码过大"; }
+            }
+            return fishingService.describeCatalog(event.getUserId(), page);
+        });
+    }
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^(武力值|战斗信息)$")
+    @CommandInfo(cmd = "武力值", desc = "查看抢劫和鳄鱼搏斗共用的武力值")
+    public void strength(Bot bot,GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot,event,()->"武力值："+combat.strength(event.getUserId())+"/100；有效胜利每天最多成长2点。");
+    }
+
+    @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(钓鱼排行榜|钓鱼榜)$")
-    @CommandInfo(cmd = "钓鱼排行榜", desc = "查看最大尺寸钓鱼排行")
+    @CommandInfo(cmd = "钓鱼排行榜", desc = "合并转发单条鱼价值最高的前十位玩家")
     public void leaderboard(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             List<EconomyFishingService.LeaderboardEntry> entries =
@@ -107,16 +131,19 @@ public class EconomyFishingPlugin {
             if (entries.isEmpty()) {
                 return "暂无钓鱼排行数据";
             }
-            StringBuilder builder = new StringBuilder("钓鱼排行榜");
+            var nodes = new java.util.ArrayList<String>();
             var playerNames = names.resolveAll(bot, event.getGroupId(), entries.stream().map(EconomyFishingService.LeaderboardEntry::userId).toList());
-            int rank = 1;
-            for (EconomyFishingService.LeaderboardEntry entry : entries) {
-                builder.append("\n").append(rank++).append(". ")
-                        .append(playerNames.get(entry.userId())).append("  ")
-                        .append(entry.fishName()).append("  ")
-                        .append(EconomyMoney.format(entry.size())).append(" cm");
+            int rank=1;
+            for(var entry:entries) {
+                String name=playerNames.get(entry.userId());
+                if(name==null || name.isBlank() || name.equals("这位玩家")) name=entry.nickname();
+                if(name==null || name.isBlank() || name.matches("[0-9]+")) name="这位玩家";
+                nodes.add("第"+(rank++)+"名："+name+"\n鱼种："+entry.fishName()+"\n大小："+EconomyMoney.format(entry.size())
+                        +"厘米\n价值："+EconomyMoney.format(entry.reward())+"金币\n钓获群聊："
+                        +(entry.groupName()==null || entry.groupName().isBlank()?"未记录":entry.groupName()));
             }
-            return builder.toString();
+            EconomyCommandSupport.sendForward(bot,event,config,nodes);
+            return null;
         });
     }
 }

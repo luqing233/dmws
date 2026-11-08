@@ -1,0 +1,14 @@
+HuYanEconomy fish catalog attribution
+
+Portions of economy/fish-catalog.json (names, descriptions, levels and size ranges)
+are adapted from the HuYanEconomy fish database, as preserved in the DMWS
+hy_economy.fish historical archive dated 2026-11-04.
+Project: https://github.com/Moyuyanli/HuYanEconomy
+Author: Moyuyanli and HuYanEconomy contributors
+Reference source checkout: d255643c3469a7d0f1a3f58d4770db6e89ac5e5b
+License: Apache-2.0 (see licenses/HuYanEconomy-Apache-2.0.txt).
+
+DMWS changes (2026-11-08): preserve the five existing DMWS species; omit
+negative-price outcomes and ordinary debris; adapt new base prices and
+difficulty to the DMWS per-catch reward formula; mark the Tide Core and
+Fatui Harbinger entries as special catches. Original database IDs are not copied.

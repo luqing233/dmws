@@ -30,9 +30,12 @@ class DmwMcpToolsTests {
         var forward = mock(ForwardMcpTools.class);
         var tools = new DmwMcpTools(tomato, economy, forward, mock(EconomyConditionMcpTools.class));
         var args = mapper.createObjectNode();
-        when(economy.shop()).thenReturn(mapper.createObjectNode().put("ok", true));
+        when(economy.shop(any())).thenReturn(mapper.createObjectNode().put("ok", true));
         assertTrue(tools.execute("dmw_economy_shop", args).path("content").get(0)
                 .path("text").asText().contains("true"));
+        var fishingArgs=mapper.createObjectNode().put("category","fishing");
+        tools.execute("dmw_economy_shop",fishingArgs);
+        verify(economy).shop(same(fishingArgs));
         tools.execute("dmw_get_book", args);
         verify(tomato).execute(eq("dmw_get_book"), same(args), any());
         verifyNoInteractions(forward);
@@ -77,6 +80,11 @@ class DmwMcpToolsTests {
 
     @Test
     void preservesExpectedGameplayErrorCodes() throws Exception {
+        var catalog = new McpToolCatalog().definitions();
+        var robberyDescription = java.util.stream.StreamSupport.stream(catalog.spliterator(), false)
+                .filter(t -> t.path("name").asText().equals("dmw_economy_rob")).findFirst().orElseThrow().path("description").asText();
+        assertTrue(robberyDescription.contains("+40 percentage points"));
+        assertTrue(robberyDescription.contains("full60 minutes"));
         var economy = mock(EconomyMcpTools.class);
         var tools = new DmwMcpTools(mock(TomatoMcpTools.class), economy, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class));
         var args = mapper.createObjectNode();

@@ -40,15 +40,19 @@ public class EconomyMcpTools {
     private final EconomyLedgerService ledgerService;
     private final EconomyPlayerNameService names;
 
-    public ObjectNode shop() {
+    public ObjectNode shop() { return shop(MAPPER.createObjectNode()); }
+    public ObjectNode shop(JsonNode args) {
+        String category=args.path("category").asText("general");
+        if(!java.util.Set.of("general","fishing").contains(category)) throw new EconomyException("INVALID_CATEGORY","商店分类为general或fishing");
         ObjectNode result = success("商店查询成功");
         ArrayNode items = result.putArray("items");
-        for (EconomyItemDefinition item : itemService.shop()) {
+        for (EconomyItemDefinition item : category.equals("fishing")?itemService.fishingShop():itemService.shop()) {
             items.addObject().put("item_code", item.getCode()).put("item_name", item.getName())
                     .put("description", item.getDescription()).put("unit_price", item.getPrice().toPlainString())
                     .put("effect_type", item.getEffectType().name())
                     .put("manual_usable", item.getEffectType() != EconomyItemEffectType.SIGN_BONUS);
         }
+        result.put("category",category);
         result.put("count", items.size());
         return result;
     }

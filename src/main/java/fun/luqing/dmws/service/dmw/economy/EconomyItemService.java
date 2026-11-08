@@ -31,10 +31,11 @@ public class EconomyItemService {
     private final EconomyTitleService titleService;
     private final EconomyEquipmentService equipment;
     private final EconomyConditionService conditions;
+    private final EconomyFishingBaitService bait;
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public List<EconomyItemDefinition> shop() {
-        return itemRepository.findAllByEnabledTrueOrderByPriceAsc();
+        return itemRepository.findAllByEnabledTrueOrderByPriceAsc().stream().filter(i->i.getEffectType()!=EconomyItemEffectType.FISHING_LUCK).toList();
     }
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
@@ -146,12 +147,9 @@ public class EconomyItemService {
             }
             case ROB_BOOST -> {
                 profile.setRobBoostCharges(profile.getRobBoostCharges() + quantity);
-                yield "使用成功，增加 " + quantity + " 次抢劫增益（剩余 " + profile.getRobBoostCharges() + " 次）；每次最终成功判定增加20个百分点，次数不叠加概率，反打或被捕也会消耗";
+                yield "使用成功，增加 " + quantity + " 次抢劫增益（剩余 " + profile.getRobBoostCharges() + " 次）；每次最终成功判定增加20个百分点，同种增益每次仅生效一次，可与一次电棍叠加；抢劫或鳄鱼搏斗失败也会消耗";
             }
-            case FISHING_LUCK -> {
-                profile.setFishingLuckCharges(profile.getFishingLuckCharges() + quantity);
-                yield "使用成功，增加 " + quantity + " 次钓鱼增益（剩余 " + profile.getFishingLuckCharges() + " 次）；每次成功率增加20个百分点，次数不叠加概率";
-            }
+            case FISHING_LUCK -> bait.open(profile, EconomyBaitQuality.parse(definition.getCode()), quantity);
             case ELECTRIC_BATON -> equipment.view(userId).text() + "\n抢劫时会自动使用，无需手动激活。";
             case BATON_CHARGER -> equipment.startCharging(userId);
             case CRIME_REDUCTION -> conditions.reduceCrime(userId, nickname, quantity);
@@ -159,6 +157,12 @@ public class EconomyItemService {
             case SIGN_BONUS -> throw new EconomyException("PASSIVE_ITEM", "该道具无需手动使用");
         };
     }
+
+    @Transactional(readOnly=true,transactionManager="dmwTransactionManager")
+    public List<EconomyItemDefinition> fishingShop() {
+        return itemRepository.findAllByEnabledTrueOrderByPriceAsc().stream().filter(i->i.getEffectType()==EconomyItemEffectType.FISHING_LUCK).toList();
+    }
+    public String baitStatus(long user) { return bait.describe(user); }
 
     public EconomyEquipmentService.EquipmentView equipment(long userId) {
         return equipment.view(userId);
@@ -201,6 +205,8 @@ public class EconomyItemService {
     public EconomyItemDefinition resolve(String codeOrName) {
         if ("电棍".equals(codeOrName)) codeOrName = "electric-baton";
         if ("充电器".equals(codeOrName)) codeOrName = "electric-baton-charger";
+        if("幸运鱼饵".equals(codeOrName)) codeOrName=EconomyBaitQuality.WHITE.code;
+        else if(codeOrName.startsWith("幸运鱼饵")) codeOrName=EconomyBaitQuality.parse(codeOrName).code;
         final String query = codeOrName;
         return itemRepository.findById(query)
                 .or(() -> itemRepository.findFirstByEnabledTrueAndName(query))

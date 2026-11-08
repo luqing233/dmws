@@ -43,18 +43,18 @@ class EconomyEquipmentTests {
     private void target(long id) { admin.adjust(id,id,"目标",new BigDecimal("1000"),true,"equip-seed-"+id); }
     private void tx(Runnable action) { new TransactionTemplate(transactions).executeWithoutResult(s->action.run()); }
 
-    @Test void aBatonSupportsFiveAutomaticAttemptsWithoutDisappearingAndOldBoostsDoNotStack() {
+    @Test void aBatonSupportsFiveAttemptsAndDifferentBoostsStackOnceEach() {
         long id=98101L, victim=98102L;grant(id,"electric-baton",1);target(victim);
         profiles.getOrCreateForUpdate(id,"玩家").setRobBoostCharges(3);
         when(random.chance(anyDouble())).thenReturn(false);
         for (int i=0;i<5;i++) {
             at(START.plusMinutes(5L*i));var result=rob.rob(id,"玩家",victim,"equip-five-"+i);
             assertTrue(result.electricBatonUsed());assertEquals(80-20*i,result.electricBatonEnergy());
-            assertEquals(3,profiles.get(id).getRobBoostCharges());
+            assertEquals(Math.max(0,2-i),profiles.get(id).getRobBoostCharges());
         }
         at(START.plusMinutes(25));var fallback=rob.rob(id,"玩家",victim,"equip-fallback");
-        assertFalse(fallback.electricBatonUsed());assertTrue(fallback.robBoostUsed());
-        assertEquals(2,profiles.get(id).getRobBoostCharges());assertEquals(1,stock(id,"electric-baton"));
+        assertFalse(fallback.electricBatonUsed());assertFalse(fallback.robBoostUsed());
+        assertEquals(0,profiles.get(id).getRobBoostCharges());assertEquals(1,stock(id,"electric-baton"));
         assertEquals(0,equipment.view(id).batons().getFirst().energy());
     }
 
@@ -142,7 +142,7 @@ class EconomyEquipmentTests {
         at(START.plusMinutes(19));when(random.chance(anyDouble())).thenReturn(false);
         var result=rob.rob(id,"玩家",victim,"skip-charging-rob");
         assertTrue(result.electricBatonUsed());assertEquals(80,result.electricBatonEnergy());
-        assertEquals(2,profiles.get(id).getRobBoostCharges());
+        assertEquals(1,profiles.get(id).getRobBoostCharges());
         assertEquals(START,batons.findByUserIdOrderByIdAsc(id).getFirst().getChargingSince());
         at(START.plusMinutes(24));var next=rob.rob(id,"玩家",victim,"interrupt-charge-rob");
         assertTrue(next.electricBatonUsed());assertEquals(4,next.electricBatonEnergy());
@@ -184,7 +184,7 @@ class EconomyEquipmentTests {
         assertEquals(4,stock(id,"golden-basin"));
         assertThrows(DuplicateEconomyOperationException.class,()->items.use(id,"玩家","golden-basin",1,"basin-use"));
         conditions.addCrime(state,100);
-        at(START.plusDays(1));assertTrue(items.use(id,"玩家","golden-basin",1,"basin-next-day").contains("当前 0/100"));
+        at(START.plusDays(1));conditions.status(id,"玩家");conditions.addCrime(state,100);assertTrue(items.use(id,"玩家","golden-basin",1,"basin-next-day").contains("当前 0/100"));
         long patient=98111L;grant(patient,"golden-basin",1);var hospital=conditions.lock(patient,"玩家");
         conditions.addCrime(hospital,5);conditions.admit(hospital,50);var hospitalUntil=hospital.getHospitalUntil();
         assertTrue(items.use(patient,"玩家","golden-basin",1,"basin-small-crime").contains("降低 5"));

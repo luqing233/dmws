@@ -19,6 +19,13 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.io.ClassPathResource;
+import org.json.JSONArray;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
 
 import java.math.BigDecimal;
 
@@ -54,20 +61,21 @@ public class EconomyCatalogInitializer implements ApplicationRunner {
                 new BigDecimal("123"), EconomyItemEffectType.SIGN_STREAK_RESTORE, BigDecimal.ZERO, null);
         saveItem("sign-monthly-card", "签到月卡", "首次签到自动激活，连续30个自然日签到五倍；最后5天签到提醒，到期后再启用下一张。",
                 new BigDecimal("9999"), EconomyItemEffectType.SIGN_BONUS, new BigDecimal("5"), null);
-        saveItem("electric-baton", "便携电棍", "可重复使用，满电100；抢劫时自动耗电20，最终成功判定增加20个百分点，不与红牛叠加。充电中够20电就自动停止充电并使用，不足则继续充电。",
+        saveItem("electric-baton", "便携电棍", "可重复使用，满电100；抢劫时自动耗电20，最终成功判定增加20个百分点，可与一次红牛叠加，同种道具每次仅生效一次。充电中够20电就自动停止充电并使用，不足则继续充电。",
                 new BigDecimal("1888"), EconomyItemEffectType.ELECTRIC_BATON, BigDecimal.ONE, null);
         saveItem("electric-baton-charger", "电棍充电器", "可重复使用，与电棍同价；使用后为电量最低的一根充电，每分钟恢复1电，空电100分钟充满。抢劫时够20电即拔电使用，不足继续充电；每人同时充一根，离线继续计时。",
                 new BigDecimal("1888"), EconomyItemEffectType.BATON_CHARGER, BigDecimal.ONE, null);
         saveItem("golden-basin", "金盆", "金盆洗手：一次清零全部犯罪值，每次一个，每个自然日最多使用2个；不缩短服刑或住院时间，犯罪值为0不消耗。",
                 new BigDecimal("1288"), EconomyItemEffectType.CRIME_REDUCTION, new BigDecimal("100"), null);
-        saveItem("red-bull", "红牛", "增加一次抢劫增益：最终成功判定增加20个百分点；次数累积但不叠加概率，反打/被捕也消耗。",
+        saveItem("red-bull", "红牛", "增加一次抢劫增益：最终成功判定增加20个百分点；次数累积，同次只消耗一次；可与一次电棍叠加，反打/被捕也消耗。",
                 new BigDecimal("888"), EconomyItemEffectType.ROB_BOOST, BigDecimal.ONE, null);
         saveItem("health-card", "医保卡", "来自壶言经济的纪念收藏品，当前版本无额外效果。",
                 new BigDecimal("5888"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);
         saveItem("rename-card", "改名卡", "来自壶言经济的纪念收藏品，当前版本无额外效果。",
                 new BigDecimal("2333"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);
-        saveItem("fishing-luck-bait", "幸运鱼饵", "增加一次钓鱼增益：成功率增加20个百分点；次数累积但不叠加概率。",
-                new BigDecimal("300"), EconomyItemEffectType.FISHING_LUCK, BigDecimal.ONE, null);
+        for(var bait:fun.luqing.dmws.service.dmw.economy.EconomyBaitQuality.values()) {
+            saveItem(bait.code,bait.displayName(),bait.description(),bait.price,EconomyItemEffectType.FISHING_LUCK,new BigDecimal("5"),bait.name());
+        }
         saveItem("star-token", "星愿币", "抽奖常见奖品，可用于装饰背包。",
                 new BigDecimal("50"), EconomyItemEffectType.NONE, BigDecimal.ZERO, null);
         saveItem("star-title-card", "星尘称号卡", "使用后获得称号「星尘旅人」。",
@@ -132,36 +140,35 @@ public class EconomyCatalogInitializer implements ApplicationRunner {
     }
 
     private void seedFish() {
-        saveFish("鲫鱼", "常见的小鱼", 1, 10, 20, 10, 30, false);
-        saveFish("鲤鱼", "力气不小的河鱼", 1, 20, 30, 20, 50, false);
-        saveFish("鲈鱼", "需要更好的鱼竿", 2, 60, 55, 25, 60, false);
-        saveFish("金鱼", "漂亮但难以遇到", 2, 100, 70, 5, 15, true);
-        saveFish("锦鲤", "传说中的幸运鱼", 3, 500, 90, 30, 80, true);
-    }
-
-    private void saveFish(
-            String name,
-            String description,
-            int level,
-            int price,
-            int difficulty,
-            int minSize,
-            int maxSize,
-            boolean special
-    ) {
-        if (fishRepository.existsByName(name)) {
-            return;
+        // The resource bootstraps missing rows only. Runtime prices/pools come from fish.
+        try (var input = new ClassPathResource("economy/fish-catalog.json").getInputStream()) {
+            var entries = new JSONArray(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+            var names = new HashSet<String>();
+            var fish = new ArrayList<Fish>();
+            for (int i = 0; i < entries.length(); i++) {
+                var entry = entries.getJSONObject(i);
+                var item = new Fish();
+                item.setName(entry.getString("name"));
+                item.setDescription(entry.getString("description"));
+                item.setLevel(entry.getInt("level"));
+                item.setPrice(entry.getInt("price"));
+                item.setDifficulty(entry.getInt("difficulty"));
+                item.setDimensionsMin(entry.getInt("dimensions_min"));
+                item.setDimensionsMax(entry.getInt("dimensions_max"));
+                item.setSpecial(entry.getBoolean("special"));
+                if (item.getName().isBlank() || !names.add(item.getName()) || item.getDescription().isBlank()
+                        || item.getLevel() < 1 || item.getPrice() < 1 || item.getDifficulty() < 0
+                        || item.getDimensionsMin() < 1 || item.getDimensionsMax() < item.getDimensionsMin()) {
+                    throw new IllegalStateException("无效或重复的默认鱼种：" + item.getName());
+                }
+                fish.add(item);
+            }
+            for (var item : fish) {
+                if (!fishRepository.existsByName(item.getName())) fishRepository.save(item);
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException("无法读取默认鱼种目录", exception);
         }
-        Fish fish = new Fish();
-        fish.setName(name);
-        fish.setDescription(description);
-        fish.setLevel(level);
-        fish.setPrice(price);
-        fish.setDifficulty(difficulty);
-        fish.setDimensionsMin(minSize);
-        fish.setDimensionsMax(maxSize);
-        fish.setSpecial(special);
-        fishRepository.save(fish);
     }
 
     private void seedFarmCrops() {

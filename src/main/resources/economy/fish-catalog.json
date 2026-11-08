@@ -1,0 +1,802 @@
+[
+  {
+    "name": "鲫鱼",
+    "description": "常见的小鱼",
+    "level": 1,
+    "price": 10,
+    "difficulty": 20,
+    "dimensions_min": 10,
+    "dimensions_max": 30,
+    "special": false
+  },
+  {
+    "name": "鲤鱼",
+    "description": "力气不小的河鱼",
+    "level": 1,
+    "price": 20,
+    "difficulty": 30,
+    "dimensions_min": 20,
+    "dimensions_max": 50,
+    "special": false
+  },
+  {
+    "name": "鲈鱼",
+    "description": "需要更好的鱼竿",
+    "level": 2,
+    "price": 60,
+    "difficulty": 55,
+    "dimensions_min": 25,
+    "dimensions_max": 60,
+    "special": false
+  },
+  {
+    "name": "金鱼",
+    "description": "漂亮但难以遇到",
+    "level": 2,
+    "price": 100,
+    "difficulty": 70,
+    "dimensions_min": 5,
+    "dimensions_max": 15,
+    "special": true
+  },
+  {
+    "name": "锦鲤",
+    "description": "传说中的幸运鱼",
+    "level": 3,
+    "price": 500,
+    "difficulty": 90,
+    "dimensions_min": 30,
+    "dimensions_max": 80,
+    "special": true
+  },
+  {
+    "name": "胖次",
+    "description": "这蓝白相间的三角形织物是什么了？",
+    "level": 1,
+    "price": 40,
+    "difficulty": 0,
+    "dimensions_min": 20,
+    "dimensions_max": 30,
+    "special": true
+  },
+  {
+    "name": "鳀鱼",
+    "description": "一种海里的小银鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 15,
+    "dimensions_min": 3,
+    "dimensions_max": 43,
+    "special": false
+  },
+  {
+    "name": "沙丁鱼",
+    "description": "一种常见的海鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 20,
+    "dimensions_min": 3,
+    "dimensions_max": 33,
+    "special": false
+  },
+  {
+    "name": "太阳鱼",
+    "description": "一种常见的河鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 25,
+    "dimensions_min": 13,
+    "dimensions_max": 41,
+    "special": false
+  },
+  {
+    "name": "鲱鱼",
+    "description": "一种常见的海鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 30,
+    "dimensions_min": 20,
+    "dimensions_max": 53,
+    "special": false
+  },
+  {
+    "name": "草鱼",
+    "description": "河里常见的鱼",
+    "level": 2,
+    "price": 30,
+    "difficulty": 38,
+    "dimensions_min": 24,
+    "dimensions_max": 120,
+    "special": false
+  },
+  {
+    "name": "鲷鱼",
+    "description": "一种夜间活跃的常见河鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 40,
+    "dimensions_min": 30,
+    "dimensions_max": 79,
+    "special": false
+  },
+  {
+    "name": "鬼鱼",
+    "description": "一种在地下湖里能找到的苍白色的盲鱼。",
+    "level": 2,
+    "price": 30,
+    "difficulty": 42,
+    "dimensions_min": 25,
+    "dimensions_max": 91,
+    "special": false
+  },
+  {
+    "name": "海参",
+    "description": "一种在海底能找到的黏滑生物。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 25,
+    "dimensions_min": 8,
+    "dimensions_max": 53,
+    "special": false
+  },
+  {
+    "name": "红鲷鱼",
+    "description": "一种身上是漂亮红色的受欢迎鱼类。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 25,
+    "dimensions_min": 20,
+    "dimensions_max": 66,
+    "special": false
+  },
+  {
+    "name": "小嘴鲈鱼",
+    "description": "一种对污染很敏感的淡水鱼。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 25,
+    "dimensions_min": 30,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "鲢鱼",
+    "description": "一种常见的淡水鱼，因贪吃的食性而广为人知。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 25,
+    "dimensions_min": 30,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "河鲈",
+    "description": "一种冬季淡水鱼。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 32,
+    "dimensions_min": 25,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "红鲻鱼",
+    "description": "从前它们被当做宠物饲养。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 35,
+    "dimensions_min": 20,
+    "dimensions_max": 58,
+    "special": false
+  },
+  {
+    "name": "巴别鱼",
+    "description": "吃掉你听不懂的，拉出来你听得懂的",
+    "level": 3,
+    "price": 32,
+    "difficulty": 35,
+    "dimensions_min": 15,
+    "dimensions_max": 60,
+    "special": false
+  },
+  {
+    "name": "虹鳟鱼",
+    "description": "一种身上有彩虹带的淡水鳟鱼。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 35,
+    "dimensions_min": 25,
+    "dimensions_max": 66,
+    "special": false
+  },
+  {
+    "name": "沙鱼",
+    "description": "它用保护色隐藏自己。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 38,
+    "dimensions_min": 20,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "罗非鱼",
+    "description": "一种主要食素、喜爱温水的鱼。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 45,
+    "dimensions_min": 28,
+    "dimensions_max": 79,
+    "special": false
+  },
+  {
+    "name": "木跃鱼",
+    "description": "一种十分敏感的鱼，只能在森林深处的水池中生存。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 45,
+    "dimensions_min": 28,
+    "dimensions_max": 79,
+    "special": false
+  },
+  {
+    "name": "大头鱼",
+    "description": "鲶鱼的近亲，以湖底的多种食物为食。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 45,
+    "dimensions_min": 30,
+    "dimensions_max": 79,
+    "special": false
+  },
+  {
+    "name": "大比目鱼",
+    "description": "形状扁平、居住在大洋底的鱼。",
+    "level": 3,
+    "price": 32,
+    "difficulty": 45,
+    "dimensions_min": 25,
+    "dimensions_max": 86,
+    "special": false
+  },
+  {
+    "name": "西鲱",
+    "description": "结群生活在海里，但会回到河里产卵。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 48,
+    "dimensions_min": 51,
+    "dimensions_max": 124,
+    "special": false
+  },
+  {
+    "name": "鱿鱼",
+    "description": "一种可以长得很大的深海生物。",
+    "level": 3,
+    "price": 32,
+    "difficulty": 48,
+    "dimensions_min": 30,
+    "dimensions_max": 124,
+    "special": false
+  },
+  {
+    "name": "青花鱼",
+    "description": "喜欢温度的\"交界处\"，即指冷水与温水交界的地方。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 48,
+    "dimensions_min": 51,
+    "dimensions_max": 104,
+    "special": false
+  },
+  {
+    "name": "鲑鱼",
+    "description": "它会游到上游产卵。",
+    "level": 3,
+    "price": 30,
+    "difficulty": 55,
+    "dimensions_min": 61,
+    "dimensions_max": 168,
+    "special": false
+  },
+  {
+    "name": "鳗鱼",
+    "description": "一种长而滑溜的小鱼。",
+    "level": 3,
+    "price": 32,
+    "difficulty": 60,
+    "dimensions_min": 30,
+    "dimensions_max": 206,
+    "special": false
+  },
+  {
+    "name": "中分，背带裤",
+    "description": "哎呦你干嘛～小黑子，食不食油饼？",
+    "level": 4,
+    "price": 40,
+    "difficulty": 25,
+    "dimensions_min": 3,
+    "dimensions_max": 184,
+    "special": true
+  },
+  {
+    "name": "蓝铁饼鱼",
+    "description": "色彩鲜艳的热带鱼，在水族馆很受欢迎。",
+    "level": 4,
+    "price": 44,
+    "difficulty": 25,
+    "dimensions_min": 15,
+    "dimensions_max": 22,
+    "special": false
+  },
+  {
+    "name": "狮子鱼",
+    "description": "好斗的食肉性鱼，有毒刺。",
+    "level": 4,
+    "price": 40,
+    "difficulty": 25,
+    "dimensions_min": 18,
+    "dimensions_max": 25,
+    "special": false
+  },
+  {
+    "name": "比目鱼",
+    "description": "它生活在底部，所以两只眼睛都在它的头顶上。",
+    "level": 4,
+    "price": 40,
+    "difficulty": 25,
+    "dimensions_min": 20,
+    "dimensions_max": 32,
+    "special": false
+  },
+  {
+    "name": "猫头鱼",
+    "description": "那不是偷王柴郡吗？快按住她口牙!家底要被偷光了!",
+    "level": 4,
+    "price": 48,
+    "difficulty": 32,
+    "dimensions_min": 21,
+    "dimensions_max": 25,
+    "special": false
+  },
+  {
+    "name": "史莱姆鱼",
+    "description": "他涂了一层厚厚的烂泥。他总是在从你手中滑落！",
+    "level": 4,
+    "price": 48,
+    "difficulty": 35,
+    "dimensions_min": 20,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "大嘴鲈鱼",
+    "description": "一种住在湖里的受欢迎鱼类。",
+    "level": 4,
+    "price": 52,
+    "difficulty": 38,
+    "dimensions_min": 28,
+    "dimensions_max": 79,
+    "special": false
+  },
+  {
+    "name": "大眼鱼",
+    "description": "一种在夜间捕捉的淡水鱼。",
+    "level": 4,
+    "price": 56,
+    "difficulty": 40,
+    "dimensions_min": 25,
+    "dimensions_max": 104,
+    "special": false
+  },
+  {
+    "name": "麻哈脂鲤",
+    "description": "凶猛的肉食鱼，有着绚烂的橙色鳞片",
+    "level": 4,
+    "price": 60,
+    "difficulty": 45,
+    "dimensions_min": 61,
+    "dimensions_max": 84,
+    "special": false
+  },
+  {
+    "name": "93式酸素鱼雷",
+    "description": "岛风酱の20kmの荧☆光☆棒",
+    "level": 4,
+    "price": 68,
+    "difficulty": 50,
+    "dimensions_min": 37,
+    "dimensions_max": 97,
+    "special": true
+  },
+  {
+    "name": "金枪鱼",
+    "description": "一种住在海里的大型鱼。",
+    "level": 4,
+    "price": 72,
+    "difficulty": 55,
+    "dimensions_min": 30,
+    "dimensions_max": 155,
+    "special": false
+  },
+  {
+    "name": "狗鱼",
+    "description": "一种很难捕捉的淡水鱼。",
+    "level": 4,
+    "price": 72,
+    "difficulty": 55,
+    "dimensions_min": 38,
+    "dimensions_max": 155,
+    "special": false
+  },
+  {
+    "name": "蛇齿单线鱼",
+    "description": "可怕的捕食者，会吞下一切可以吃下的东西。",
+    "level": 4,
+    "price": 76,
+    "difficulty": 60,
+    "dimensions_min": 76,
+    "dimensions_max": 130,
+    "special": false
+  },
+  {
+    "name": "新叶鱼",
+    "description": "快按住它!可爱的鱼鱼千万不要进化口牙!",
+    "level": 5,
+    "price": 80,
+    "difficulty": 25,
+    "dimensions_min": 10,
+    "dimensions_max": 12,
+    "special": false
+  },
+  {
+    "name": "午夜鲤鱼",
+    "description": "这种害羞的鱼只在晚上感到舒适。",
+    "level": 5,
+    "price": 80,
+    "difficulty": 25,
+    "dimensions_min": 12,
+    "dimensions_max": 52,
+    "special": false
+  },
+  {
+    "name": "润水鱼",
+    "description": "这鱼怎么一股jo味?",
+    "level": 5,
+    "price": 88,
+    "difficulty": 30,
+    "dimensions_min": 10,
+    "dimensions_max": 13,
+    "special": false
+  },
+  {
+    "name": "虎纹鳟鱼",
+    "description": "一种不能繁殖后代的稀有杂交鳟鱼。",
+    "level": 5,
+    "price": 100,
+    "difficulty": 30,
+    "dimensions_min": 25,
+    "dimensions_max": 53,
+    "special": false
+  },
+  {
+    "name": "呆火鱼",
+    "description": "反正最后是要变大妈的，放弃吧",
+    "level": 5,
+    "price": 100,
+    "difficulty": 38,
+    "dimensions_min": 10,
+    "dimensions_max": 12,
+    "special": false
+  },
+  {
+    "name": "黄貂鱼",
+    "description": "虽然有毒刺，但这种鱼很害羞，喜欢避开人类。",
+    "level": 5,
+    "price": 108,
+    "difficulty": 40,
+    "dimensions_min": 18,
+    "dimensions_max": 61,
+    "special": false
+  },
+  {
+    "name": "蝎鲤鱼",
+    "description": "它和普通的鲤鱼很像，但是它有锋利的毒刺。",
+    "level": 5,
+    "price": 120,
+    "difficulty": 45,
+    "dimensions_min": 30,
+    "dimensions_max": 84,
+    "special": false
+  },
+  {
+    "name": "章鱼",
+    "description": "一种神秘聪明的生物。",
+    "level": 5,
+    "price": 124,
+    "difficulty": 60,
+    "dimensions_min": 30,
+    "dimensions_max": 124,
+    "special": false
+  },
+  {
+    "name": "无力的鲑鱼",
+    "description": "一条鲑鱼，被虚空力量所扭曲。新鲜的肉是墨黑色的，但当暴露于空气中时很快变成粉红色的了。",
+    "level": 5,
+    "price": 136,
+    "difficulty": 75,
+    "dimensions_min": 61,
+    "dimensions_max": 165,
+    "special": false
+  },
+  {
+    "name": "河豚",
+    "description": "它受到威胁时会膨胀。",
+    "level": 6,
+    "price": 140,
+    "difficulty": 32,
+    "dimensions_min": 3,
+    "dimensions_max": 94,
+    "special": false
+  },
+  {
+    "name": "宁宁起爆器",
+    "description": "总之不要当着宁宁的面随便乱按啦ciallo~",
+    "level": 6,
+    "price": 232,
+    "difficulty": 60,
+    "dimensions_min": 5,
+    "dimensions_max": 10,
+    "special": true
+  },
+  {
+    "name": "鲟鱼",
+    "description": "古老的生物链底层生物，数量一直在减少。雌性的寿命长达150年。",
+    "level": 6,
+    "price": 160,
+    "difficulty": 60,
+    "dimensions_min": 30,
+    "dimensions_max": 155,
+    "special": false
+  },
+  {
+    "name": "鲶鱼",
+    "description": "一种能在小溪里找到的罕见鱼类。",
+    "level": 6,
+    "price": 180,
+    "difficulty": 62,
+    "dimensions_min": 30,
+    "dimensions_max": 185,
+    "special": false
+  },
+  {
+    "name": "章鱼哥",
+    "description": "“除了我，所有人都是白痴。”",
+    "level": 6,
+    "price": 232,
+    "difficulty": 90,
+    "dimensions_min": 50,
+    "dimensions_max": 80,
+    "special": true
+  },
+  {
+    "name": "海绵宝宝",
+    "description": "”派大星，你为什么叫派大星？“",
+    "level": 6,
+    "price": 232,
+    "difficulty": 90,
+    "dimensions_min": 50,
+    "dimensions_max": 90,
+    "special": true
+  },
+  {
+    "name": "派大星",
+    "description": "”我要两个冰淇淋，一个给我吃一个给我的好朋友海绵宝宝。“",
+    "level": 6,
+    "price": 232,
+    "difficulty": 90,
+    "dimensions_min": 60,
+    "dimensions_max": 120,
+    "special": true
+  },
+  {
+    "name": "皇家小龙虾",
+    "description": "一种体型大的海洋甲壳纲生物，有一个强壮的尾巴",
+    "level": 7,
+    "price": 292,
+    "difficulty": 35,
+    "dimensions_min": 30,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "幽灵鱼",
+    "description": "巨大的眼睛可以检测到猎物微弱的侧影。",
+    "level": 7,
+    "price": 240,
+    "difficulty": 70,
+    "dimensions_min": 20,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "大海参",
+    "description": "一种稀有紫色品种的海参。",
+    "level": 7,
+    "price": 260,
+    "difficulty": 72,
+    "dimensions_min": 30,
+    "dimensions_max": 94,
+    "special": false
+  },
+  {
+    "name": "虎纹鲨鱼",
+    "description": "鱼，好大的鱼，虎纹鲨鱼！",
+    "level": 8,
+    "price": 300,
+    "difficulty": 80,
+    "dimensions_min": 14,
+    "dimensions_max": 20,
+    "special": true
+  },
+  {
+    "name": "石鱼",
+    "description": "一种形状像砖块的奇怪鱼类。",
+    "level": 8,
+    "price": 332,
+    "difficulty": 83,
+    "dimensions_min": 36,
+    "dimensions_max": 65,
+    "special": false
+  },
+  {
+    "name": "雄安康鱼",
+    "description": "它用发光的拟饵来吸引猎物。",
+    "level": 8,
+    "price": 340,
+    "difficulty": 85,
+    "dimensions_min": 43,
+    "dimensions_max": 60,
+    "special": false
+  },
+  {
+    "name": "袁华",
+    "description": "我靠？袁华？",
+    "level": 8,
+    "price": 356,
+    "difficulty": 95,
+    "dimensions_min": 85,
+    "dimensions_max": 100,
+    "special": true
+  },
+  {
+    "name": "远古守护者",
+    "description": "喜提挖掘疲劳5min",
+    "level": 9,
+    "price": 360,
+    "difficulty": 45,
+    "dimensions_min": 5,
+    "dimensions_max": 10,
+    "special": false
+  },
+  {
+    "name": "冰柱鱼",
+    "description": "一种在极寒条件下生长的稀有鱼类。",
+    "level": 9,
+    "price": 368,
+    "difficulty": 80,
+    "dimensions_min": 18,
+    "dimensions_max": 23,
+    "special": false
+  },
+  {
+    "name": "水滴鱼",
+    "description": "这些古怪的生物漂浮在海底上，吃掉所经之地的任何可食材料。",
+    "level": 9,
+    "price": 368,
+    "difficulty": 82,
+    "dimensions_min": 20,
+    "dimensions_max": 64,
+    "special": false
+  },
+  {
+    "name": "岩浆鳗鱼",
+    "description": "它可以在炽热的岩浆中生存。",
+    "level": 9,
+    "price": 376,
+    "difficulty": 88,
+    "dimensions_min": 79,
+    "dimensions_max": 90,
+    "special": false
+  },
+  {
+    "name": "心海",
+    "description": "珊瑚宫的心海",
+    "level": 9,
+    "price": 380,
+    "difficulty": 95,
+    "dimensions_min": 90,
+    "dimensions_max": 95,
+    "special": true
+  },
+  {
+    "name": "潮涌核心",
+    "description": "没海晶石估计没法用，只能卖了",
+    "level": 3,
+    "price": 480,
+    "difficulty": 50,
+    "dimensions_min": 7,
+    "dimensions_max": 15,
+    "special": true
+  },
+  {
+    "name": "渔人众执行官",
+    "description": "你的钓鱼技能上升了（应该",
+    "level": 10,
+    "price": 500,
+    "difficulty": 60,
+    "dimensions_min": 8,
+    "dimensions_max": 20,
+    "special": true
+  },
+  {
+    "name": "鲲鲲",
+    "description": "附送一个🏀，两条白带",
+    "level": 10,
+    "price": 500,
+    "difficulty": 65,
+    "dimensions_min": 10,
+    "dimensions_max": 10,
+    "special": true
+  },
+  {
+    "name": "雌安康鱼",
+    "description": "会变成美少女的安康鱼，不仅可以食用?",
+    "level": 10,
+    "price": 400,
+    "difficulty": 78,
+    "dimensions_min": 17,
+    "dimensions_max": 39,
+    "special": false
+  },
+  {
+    "name": "RTX 4090Ti 显卡",
+    "description": "一个进了水的显卡，但万一能用呢？",
+    "level": 10,
+    "price": 400,
+    "difficulty": 85,
+    "dimensions_min": 30,
+    "dimensions_max": 30,
+    "special": true
+  },
+  {
+    "name": "冰川鱼",
+    "description": "会在冰川的底部搭巢。",
+    "level": 10,
+    "price": 400,
+    "difficulty": 92,
+    "dimensions_min": 66,
+    "dimensions_max": 99,
+    "special": false
+  },
+  {
+    "name": "心海的鱼子酱",
+    "description": "嘿嘿嘿~心海~嘿嘿嘿~心海~~~",
+    "level": 10,
+    "price": 500,
+    "difficulty": 98,
+    "dimensions_min": 30,
+    "dimensions_max": 40,
+    "special": true
+  },
+  {
+    "name": "年年有鱼",
+    "description": "生活富足,每年都有多余的财富及食粮。",
+    "level": 11,
+    "price": 480,
+    "difficulty": 95,
+    "dimensions_min": 75,
+    "dimensions_max": 90,
+    "special": true
+  }
+]

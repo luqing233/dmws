@@ -67,6 +67,7 @@ public class EconomyConditionService {
 
     @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
     public void addCrime(EconomyPlayerCondition state, int points) {
+        if (state.getCrime() == 0 && points > 0) state.setCrimeDecayAt(time.now());
         state.setCrime(Math.min(100, state.getCrime() + Math.max(0, points)));
     }
 
@@ -79,6 +80,7 @@ public class EconomyConditionService {
         if (quantity > 2 - used) throw new EconomyException("CRIME_RELIEF_LIMIT", "金盆每天最多使用2个，今天还可使用 " + (2 - used) + " 个");
         int reduction = state.getCrime();
         state.setCrime(0);
+        state.setCrimeDecayAt(null);
         state.setCrimeReliefOn(time.today()); state.setCrimeReliefUsed(used + quantity);
         return "金盆洗手成功，犯罪值降低 " + reduction + " 点，当前 " + state.getCrime() + "/100。"
                 + (state.getJailUntil() != null ? "服刑时间不变。" : "");
@@ -183,11 +185,13 @@ public class EconomyConditionService {
 
     private void refresh(EconomyPlayerCondition state) {
         LocalDateTime now = time.now();
-        if (state.getCrimeDecayOn() != null) {
-            long days = Math.max(0, ChronoUnit.DAYS.between(state.getCrimeDecayOn(), now.toLocalDate()));
-            state.setCrime((int) Math.max(0, state.getCrime() - Math.min(100L, days * rules.getCrimeDecayPerDay())));
+        if (state.getCrime() == 0) state.setCrimeDecayAt(null);
+        else if (state.getCrimeDecayAt() == null) state.setCrimeDecayAt(now);
+        else {
+            long hours = Math.max(0, Duration.between(state.getCrimeDecayAt(), now).toHours());
+            state.setCrime((int) Math.max(0, state.getCrime() - Math.min(100L, hours * 5)));
+            state.setCrimeDecayAt(state.getCrime() == 0 ? null : state.getCrimeDecayAt().plusHours(hours));
         }
-        state.setCrimeDecayOn(now.toLocalDate());
         if (state.getHospitalUntil() != null && !now.isBefore(state.getHospitalUntil())) finishHospital(state, state.getHospitalUntil());
         if (state.getJailUntil() != null && !now.isBefore(state.getJailUntil())) state.setJailUntil(null);
     }

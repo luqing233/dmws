@@ -24,7 +24,6 @@ public class EconomyAdventureProperties {
     private int crimePerSuccess = 5;
     private int crimePerAssault = 15;
     private int crimePerArrest = 10;
-    private int crimeDecayPerDay = 5;
     private int bailMaxCrime = 10;
     private BigDecimal bailBase = new BigDecimal("100");
     private BigDecimal bailPerCrime = new BigDecimal("20");
@@ -44,7 +43,7 @@ public class EconomyAdventureProperties {
                 || maxStolen.compareTo(new BigDecimal("5000")) > 0) {
             throw new IllegalArgumentException("抢劫比例须在 (0,1] 内且上限不超过 5000");
         }
-        for (int value : new int[]{crimePerAttempt, crimePerSuccess, crimePerAssault, crimePerArrest, crimeDecayPerDay, bailMaxCrime}) {
+        for (int value : new int[]{crimePerAttempt, crimePerSuccess, crimePerAssault, crimePerArrest, bailMaxCrime}) {
             if (value < 0 || value > 100) throw new IllegalArgumentException("犯罪值配置须在 0–100 之间");
         }
         for (BigDecimal value : new BigDecimal[]{bailBase, bailPerCrime, diagnosisPerInjury, lightHourlyFee, mediumHourlyFee, severeHourlyFee}) {

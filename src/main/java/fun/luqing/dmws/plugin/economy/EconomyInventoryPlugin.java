@@ -37,19 +37,19 @@ public class EconomyInventoryPlugin {
     public void backpack(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             List<EconomyUserItem> items = itemService.backpack(event.getUserId());
-            if (items.isEmpty()) {
-                return "背包是空的";
-            }
+            if (items.isEmpty()) return "背包无完整道具。\n"+itemService.baitStatus(event.getUserId());
             StringBuilder builder = new StringBuilder("我的背包");
             for (EconomyUserItem item : items) {
-                String name = itemService.definition(item.getItemCode()).getName();
+                var definition=itemService.definition(item.getItemCode());
+                String name = definition.getName();
                 builder.append("\n- ").append(name)
                         .append(" [").append(item.getItemCode()).append("]")
-                        .append(" x").append(item.getQuantity());
+                        .append(" ").append(item.getQuantity()).append(definition.getEffectType()==fun.luqing.dmws.enums.EconomyItemEffectType.FISHING_LUCK?"包":"个");
             }
             if (items.stream().anyMatch(i -> i.getItemCode().equals("electric-baton"))) {
                 builder.append("\n\n").append(itemService.equipment(event.getUserId()).text());
             }
+            builder.append("\n\n").append(itemService.baitStatus(event.getUserId()));
             return builder.toString();
         });
     }
@@ -107,8 +107,11 @@ public class EconomyInventoryPlugin {
                         + "，花费 " + EconomyMoney.format(title.getPrice());
             }
 
-            EconomyItemDefinition item = itemService.resolve(parts[0]);
-            int quantity = EconomyCommandSupport.quantity(parts.length > 1 ? parts[1] : null, 1);
+            boolean qualityArgument=parts[0].equals("幸运鱼饵") && parts.length>1 && parts[1].matches("[白绿蓝紫金红]色?");
+            String itemName=parts[0]+(qualityArgument?parts[1]:"");
+            int quantityIndex=qualityArgument?2:1;
+            EconomyItemDefinition item = itemService.resolve(itemName);
+            int quantity = EconomyCommandSupport.quantity(parts.length > quantityIndex ? parts[quantityIndex] : null, 1);
             EconomyItemService.PurchaseResult purchase = itemService.buy(
                     event.getUserId(),
                     EconomyCommandSupport.nickname(event),
@@ -116,7 +119,7 @@ public class EconomyInventoryPlugin {
                     quantity,
                     EconomyCommandSupport.operationId("item-buy", event, item.getCode())
             );
-            String message = "购买成功: " + item.getName() + " x" + quantity
+            String message = "购买成功: " + item.getName() + " " + quantity + (item.getEffectType()==fun.luqing.dmws.enums.EconomyItemEffectType.FISHING_LUCK?"包":"个")
                     + "，花费 " + EconomyMoney.format(
                     item.getPrice().multiply(java.math.BigDecimal.valueOf(quantity))
             );
@@ -136,8 +139,11 @@ public class EconomyInventoryPlugin {
             if (parts.length == 0) {
                 throw new EconomyException("ARGUMENT_REQUIRED", "请提供要使用的道具");
             }
-            EconomyItemDefinition item = itemService.resolve(parts[0]);
-            int quantity = EconomyCommandSupport.quantity(parts.length > 1 ? parts[1] : null, 1);
+            boolean qualityArgument=parts[0].equals("幸运鱼饵") && parts.length>1 && parts[1].matches("[白绿蓝紫金红]色?");
+            String itemName=parts[0]+(qualityArgument?parts[1]:"");
+            int quantityIndex=qualityArgument?2:1;
+            EconomyItemDefinition item = itemService.resolve(itemName);
+            int quantity = EconomyCommandSupport.quantity(parts.length > quantityIndex ? parts[quantityIndex] : null, 1);
             return itemService.use(
                     event.getUserId(),
                     EconomyCommandSupport.nickname(event),

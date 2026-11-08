@@ -29,7 +29,6 @@ public class EconomyProperties {
     private BigDecimal privateBankLoanRate = new BigDecimal("0.10");
     private int privateBankMaxLoanDays = 30;
     private BigDecimal fishingRodPrice = new BigDecimal("500.00");
-    private BigDecimal fishingCost = new BigDecimal("20.00");
     private long fishingCooldownSeconds = 30;
     private long robCooldownSeconds = 300;
     private BigDecimal robFine = new BigDecimal("50.00");

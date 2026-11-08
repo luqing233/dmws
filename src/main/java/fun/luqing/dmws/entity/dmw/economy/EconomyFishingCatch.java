@@ -20,6 +20,9 @@ public class EconomyFishingCatch {
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
+    private Long groupId;
+    private String groupName;
+    private String nickname;
 
     @Column(name = "fish_id", nullable = false)
     private Integer fishId;
@@ -38,6 +41,6 @@ public class EconomyFishingCatch {
 
     @PrePersist
     void onCreate() {
-        caughtAt = LocalDateTime.now();
+        if (caughtAt == null) caughtAt = LocalDateTime.now();
     }
 }

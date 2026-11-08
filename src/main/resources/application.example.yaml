@@ -62,7 +62,6 @@ dmws:
     private-bank-loan-rate: 0.10
     private-bank-max-loan-days: 30
     fishing-rod-price: 500
-    fishing-cost: 20
     fishing-cooldown-seconds: 30
     rob-cooldown-seconds: 300
     rob-fine: 50
@@ -81,7 +80,7 @@ dmws:
       crime-per-success: 5
       crime-per-assault: 15
       crime-per-arrest: 10
-      crime-decay-per-day: 5
+      # 犯罪值固定每完整60分钟自然下降5点，最低0；离线时间计入。
       bail-max-crime: 10
       bail-base: 100
       bail-per-crime: 20

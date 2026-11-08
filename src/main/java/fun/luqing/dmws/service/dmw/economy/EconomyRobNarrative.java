@@ -53,7 +53,7 @@ public final class EconomyRobNarrative {
             text += "\n可请低犯罪值的群友发送“保释 @你”，先用“保释费用 @你”查价。";
         }
         if (r.electricBatonUsed()) text += "\n电棍滋了一声，耗电20，剩余 " + r.electricBatonEnergy() + "/100；装备还在，包赢不在服务范围。";
-        else if (r.robBoostUsed()) text += "\n本次消耗了 1 次抢劫增益，增益没承诺包赢。";
+        if (r.robBoostUsed()) text += "\n本次消耗了 1 次红牛增益，增益没承诺包赢。";
         return text + "\n犯罪值：" + r.crime() + "/100";
     }
 

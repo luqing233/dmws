@@ -334,13 +334,13 @@ class EconomyAdventureTests {
     }
 
     @Test
-    void crimeDecaysByCalendarDaysButNeverBelowZero() {
+    void crimeDecaysByElapsedHoursButNeverBelowZero() {
         long id = 97030L;
         conditions.addCrime(conditions.lock(id, "玩家"), 11);
-        at(START.plusDays(2));
+        at(START.plusHours(2));
         assertEquals(1, conditions.status(id, "玩家").crime());
         assertEquals(1, conditions.status(id, "玩家").crime());
-        at(START.plusDays(3));
+        at(START.plusHours(3));
         assertEquals(0, conditions.status(id, "玩家").crime());
     }
 
