@@ -28,7 +28,7 @@ public class DmwMcpTools {
         try {
             switch (tool) {
                 case "dmw_economy_fx_market", "dmw_economy_fx_positions", "dmw_economy_fx_history",
-                     "dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay" ->
+                     "dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay", "dmw_economy_fx_add_margin" ->
                         addText(content, marketMcpTools.execute(tool, args));
                 case "dmw_economy_shop" -> addText(content, economyMcpTools.shop(args));
                 case "dmw_economy_balance" -> addText(content, economyMcpTools.balance(args));

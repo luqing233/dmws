@@ -25,12 +25,14 @@ import static org.mockito.Mockito.*;
 @Transactional(transactionManager = "dmwTransactionManager")
 class EconomyMarketTests {
     @Autowired EconomyMarketService market;
+    @Autowired EconomyMarketHistoryService priceHistory;
     @Autowired EconomyMarketProperties rules;
     @Autowired fun.luqing.dmws.config.DmwConfig config;
     @Autowired EconomyMarketStateRepository states;
     @Autowired EconomyMarketQuoteRepository quotes;
     @Autowired EconomyMarketPositionRepository positions;
     @Autowired EconomyMarketReceiptRepository receipts;
+    @Autowired EconomyMarketNoticeRepository notices;
     @Autowired EconomyUserProfileRepository profiles;
     @Autowired EconomyAccountRepository accounts;
     @Autowired EconomyOperationRepository operations;
@@ -64,10 +66,93 @@ class EconomyMarketTests {
         when(time.now()).thenReturn(START.plusMinutes(minute * 10L));
         when(random.nextReturn(anyString(), anyLong(), any())).thenReturn(new BigDecimal(change));
         market.tick();
+        // Historical settlement tests assert final accounting AFTER the newly introduced response window.
+        if (positions.findByUserIdAndStatusOrderByIdAsc(USER, Status.OPEN).stream().anyMatch(p -> p.getMarginCallDeadline() != null)) {
+            var expiry = time.now().plusMinutes(5);
+            when(time.now()).thenReturn(expiry);
+            market.tick();
+        }
     }
     BigDecimal wallet() { return ledger.balance(USER, EconomyAccountScope.WALLET).balance(); }
     BigDecimal escrow() { return queries.accountBalance(EconomyMarketService.escrowKey(USER), EconomyAccountScope.PLUGIN); }
     String code(Runnable action) { return assertThrows(EconomyException.class, action::run).getCode(); }
+
+    EconomyMarketService.ActionResult groupOpen() {
+        return market.openInGroup(USER, "交易测试", EconomyFxPair.EUR_USD, Side.LONG, new BigDecimal("1000"), 100, "group-open", 456L);
+    }
+    void riskTick(String change) {
+        when(time.now()).thenReturn(START.plusMinutes(10));
+        when(random.nextReturn(anyString(), anyLong(), any())).thenReturn(new BigDecimal(change));
+        market.tick();
+    }
+
+    @Test void warningAtSixtyPercentIsDurableAndClaimedOnlyOnce() {
+        seed("3000"); var opened = groupOpen(); riskTick("-.006");
+        var position = positions.findById(opened.positionId()).orElseThrow();
+        assertNull(position.getMarginCallDeadline()); assertTrue(position.isRiskWarned());
+        assertEquals(1, notices.count()); market.tick(); assertEquals(1, notices.count());
+        var notice = market.claimNotice();
+        assertEquals(USER, notice.userId()); assertEquals(456, notice.groupId());
+        assertTrue(notice.message().contains("60%")); assertNull(market.claimNotice());
+        market.finishNotice(notice.id(), "SENT", "1234");
+        assertNull(market.claimNotice()); assertEquals("SENT", notices.findById(notice.id()).orElseThrow().getStatus());
+    }
+
+    @Test void eightyPercentWaitsAndCollateralRescueDoesNotIncreaseExposureOrChargeAnotherFee() {
+        seed("3000"); var opened = groupOpen(); riskTick("-.008");
+        var position = positions.findById(opened.positionId()).orElseThrow();
+        assertEquals(Status.OPEN, position.getStatus()); assertEquals(START.plusMinutes(15), position.getMarginCallDeadline());
+        BigDecimal notional = position.getNotional(), entry = position.getEntryPrice(), fees = states.findById(1).orElseThrow().getFees();
+        var result = market.addMargin(USER, "", opened.positionId(), new BigDecimal("500"), "rescue");
+        assertEquals(result, market.addMargin(USER, "", opened.positionId(), new BigDecimal("500.00"), "rescue"));
+        assertEquals("OPERATION_CONFLICT", code(() -> market.addMargin(USER, "", opened.positionId(), new BigDecimal("501"), "rescue")));
+        assertNull(position.getMarginCallDeadline()); assertEquals(new BigDecimal("1500.00"), escrow());
+        assertEquals(notional, position.getNotional()); assertEquals(entry, position.getEntryPrice());
+        assertEquals(fees, states.findById(1).orElseThrow().getFees());
+        assertNull(market.claimNotice()); // rescued before delivery: suppress obsolete call
+        assertEquals("OBSOLETE", notices.findAll().getFirst().getStatus());
+    }
+
+    @Test void timeoutUsesTriggerQuoteBeforePublishingLaterFavorablePriceAndDoesNotRepeatSettlement() {
+        seed("2000"); var opened = groupOpen(); riskTick("-.008");
+        var deadline = positions.findById(opened.positionId()).orElseThrow().getMarginCallDeadline();
+        market.tick(); assertEquals(deadline, positions.findById(opened.positionId()).orElseThrow().getMarginCallDeadline());
+        when(time.now()).thenReturn(START.plusMinutes(20));
+        when(random.nextReturn(anyString(), anyLong(), any())).thenReturn(new BigDecimal(".03"));
+        market.tick();
+        var position = positions.findById(opened.positionId()).orElseThrow();
+        assertEquals(Status.LIQUIDATED, position.getStatus()); assertEquals(new BigDecimal("-800.00"), position.getPnl());
+        assertEquals(new BigDecimal("1145.00"), wallet());
+        market.tick(); market.close(USER,"",opened.positionId(),"timeout-again"); assertEquals(new BigDecimal("1145.00"), wallet());
+        var notice = market.claimNotice(); assertTrue(notice.message().contains("已强制平仓")); assertNull(market.claimNotice());
+    }
+
+    @Test void inadequateCollateralSettlesImmediatelyAndCannotExtendDeadline() {
+        seed("3000"); var opened = groupOpen(); riskTick("-.01");
+        var result = market.addMargin(USER,"",opened.positionId(),new BigDecimal("100"),"too-little");
+        assertTrue(result.displayText().contains("不足维持"));
+        assertEquals(Status.LIQUIDATED, positions.findById(opened.positionId()).orElseThrow().getStatus());
+        assertEquals(new BigDecimal("1945.00"), wallet()); assertEquals(new BigDecimal("0.00"), escrow());
+        assertEquals(result, market.addMargin(USER,"",opened.positionId(),new BigDecimal("100"),"too-little"));
+    }
+
+    @Test void exactDeadlineRejectsTopupWithoutTakingItsMoneyAndKeepsReceiptIdempotent() {
+        seed("3000"); var opened = groupOpen(); riskTick("-.008");
+        when(time.now()).thenReturn(START.plusMinutes(15));
+        var result = market.addMargin(USER,"",opened.positionId(),new BigDecimal("500"),"late-rescue");
+        assertEquals(new BigDecimal("0.00"), result.amount()); assertTrue(result.displayText().contains("本次未扣"));
+        assertEquals(new BigDecimal("2145.00"), wallet());
+        assertEquals(result, market.addMargin(USER,"",opened.positionId(),new BigDecimal("500"),"late-rescue"));
+    }
+
+    @Test void topupsRespectOwnershipMarginLimitsAndStillWorkAfterAdministratorClosesMarket() {
+        seed("10000"); var opened = groupOpen(); riskTick("-.008");
+        assertEquals("POSITION_NOT_FOUND", code(() -> market.addMargin(USER+1,"",opened.positionId(),new BigDecimal("500"),"wrong-owner")));
+        assertEquals("MARKET_POSITION_LIMIT", code(() -> market.addMargin(USER,"",opened.positionId(),new BigDecimal("5000"),"too-much")));
+        var state = states.findById(1).orElseThrow(); state.setTradingEnabled(false);
+        assertNotNull(market.addMargin(USER,"",opened.positionId(),new BigDecimal("500"),"closed-rescue"));
+        assertEquals(Status.OPEN, positions.findById(opened.positionId()).orElseThrow().getStatus());
+    }
 
     @Test void quoteAndPortfolioQueriesNeverCreateProfilesAccountsOrTicks() {
         long userCount = profiles.count(), accountCount = accounts.count(), quoteCount = quotes.count();
@@ -76,6 +161,16 @@ class EconomyMarketTests {
         assertTrue(market.history(999777).isEmpty());
         assertEquals(userCount, profiles.count()); assertEquals(accountCount, accounts.count()); assertEquals(quoteCount, quotes.count());
         assertTrue(EconomyMarketText.market(market.market()).contains("非真实汇率"));
+    }
+
+    @Test void historicalPriceQueryReadsPersistedSnapshotsAndDoesNotAdvanceTheMarketOrRegisterPlayers() {
+        tick(1,".001");
+        long quoteCount=quotes.count(), profileCount=profiles.count(), accountCount=accounts.count(), operationCount=operations.count();
+        var view=priceHistory.query(EconomyFxPair.EUR_USD,EconomyMarketHistoryService.Period.DAY);
+        assertEquals(2,view.count());assertEquals(EconomyFxPair.EUR_USD.initial(),view.first());
+        assertEquals(new BigDecimal("0.001000000000"),view.change());assertTrue(view.partial());
+        assertEquals(quoteCount,quotes.count());assertEquals(profileCount,profiles.count());
+        assertEquals(accountCount,accounts.count());assertEquals(operationCount,operations.count());
     }
 
     @Test void administratorSwitchPersistsAndDoesNotTrapExistingPositionsOrReplayOldSwitches() {
@@ -140,7 +235,7 @@ class EconomyMarketTests {
         assertEquals(new BigDecimal("500.00"), escrow());
     }
 
-    @Test void eightyPercentLossLiquidatesOnceAtActualQuote() {
+    @Test void eightyPercentLossLiquidatesOnceAfterResponseWindowAtTriggerQuote() {
         seed("2000"); var opened = open("liq-open", "1000", 100, Side.LONG);
         tick(1, "-.008");
         var pos = positions.findById(opened.positionId()).orElseThrow();

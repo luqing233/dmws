@@ -74,6 +74,17 @@ public final class EconomyCommandSupport {
         }
     }
 
+    public static void sendForward(Bot bot, long groupId, DmwConfig config, List<String> nodes) {
+        try {
+            var response = bot.sendGroupForwardMsg(groupId,
+                    ShiroUtils.generateForwardMsg(config.getBotId(), config.getBotName(), nodes));
+            if (response != null && Integer.valueOf(0).equals(response.getRetCode()) && response.getData() != null) return;
+        } catch (RuntimeException exception) {
+            log.warn("合并转发发送失败，降级为普通消息: group={}", groupId, exception);
+        }
+        bot.sendGroupMsg(groupId, String.join("\n\n", nodes), false);
+    }
+
     public static String plainText(GroupMessageEvent event) {
         String text = event.getPlainText();
         if (text == null) {

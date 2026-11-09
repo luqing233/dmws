@@ -41,6 +41,11 @@ public class EconomyMarketPosition {
     private Long entryQuote;
     @Column(nullable = false)
     private LocalDateTime openedAt;
+    private Long originGroupId;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean riskWarned;
+    private Long marginCallQuote;
+    private LocalDateTime marginCallDeadline;
     @Column(precision = 24, scale = 8)
     private BigDecimal exitPrice;
     private Long exitQuote;

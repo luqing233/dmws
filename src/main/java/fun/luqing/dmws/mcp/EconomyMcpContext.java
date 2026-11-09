@@ -23,7 +23,7 @@ public class EconomyMcpContext {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     public static final Set<String> WRITES = Set.of("dmw_economy_buy", "dmw_economy_use_item",
             "dmw_economy_transfer", "dmw_economy_rob", "dmw_economy_discharge", "dmw_economy_bail",
-            "dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay");
+            "dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay", "dmw_economy_fx_add_margin");
     private final DmwConfig config;
 
     public JsonNode authorize(String tool, JsonNode args) {

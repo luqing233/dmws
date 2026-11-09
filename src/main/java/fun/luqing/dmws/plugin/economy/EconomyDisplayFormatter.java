@@ -22,6 +22,23 @@ public final class EconomyDisplayFormatter {
     private EconomyDisplayFormatter() {
     }
 
+    /** One overview and one node per position/receipt; bounded pages preserve all content. */
+    public static List<String> market(String category, String text) {
+        List<String> bodies = new ArrayList<>();
+        for (String section : text.strip().split("\\n\\s*\\n")) {
+            while (section.length() > 1600) {
+                int split = section.lastIndexOf('\n', 1600);
+                if (split <= 0) split = 1600;
+                if (Character.isHighSurrogate(section.charAt(split - 1))) split--;
+                bodies.add(section.substring(0, split)); section = section.substring(split).stripLeading();
+            }
+            if (!section.isBlank()) bodies.add(section);
+        }
+        List<String> nodes = new ArrayList<>();
+        for (int i = 0; i < bodies.size(); i++) nodes.add("【交易｜" + category + (bodies.size() > 1 ? " · " + (i + 1) + "/" + bodies.size() : "") + "】\n" + bodies.get(i));
+        return List.copyOf(nodes);
+    }
+
     public static List<String> backpack(List<String> items, String equipment, String bait) {
         List<String> nodes = new ArrayList<>();
         nodes.add("我的背包\n" + (items.isEmpty() ? "暂无完整道具" : "道具种类：" + items.size())

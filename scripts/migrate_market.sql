@@ -67,6 +67,48 @@ CREATE TABLE IF NOT EXISTS economy_market_receipt (
     display_text VARCHAR(1000) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Additive migration for margin calls; existing positions retain their original margin/exposure.
+CREATE TABLE IF NOT EXISTS economy_market_notice (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    group_id BIGINT NOT NULL,
+    position_id BIGINT NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    kind VARCHAR(16) NOT NULL,
+    trigger_quote BIGINT NULL,
+    message VARCHAR(1200) NOT NULL,
+    message_id VARCHAR(255) NULL,
+    INDEX idx_market_notice_status (status,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET @dmw_fx_column = IF((SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='economy_market_position' AND column_name='origin_group_id')=0,
+    'ALTER TABLE economy_market_position ADD COLUMN origin_group_id BIGINT NULL','SELECT 1');
+PREPARE dmw_fx_column_stmt FROM @dmw_fx_column;
+EXECUTE dmw_fx_column_stmt;
+DEALLOCATE PREPARE dmw_fx_column_stmt;
+
+SET @dmw_fx_column = IF((SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='economy_market_position' AND column_name='risk_warned')=0,
+    'ALTER TABLE economy_market_position ADD COLUMN risk_warned BOOLEAN NOT NULL DEFAULT false','SELECT 1');
+PREPARE dmw_fx_column_stmt FROM @dmw_fx_column;
+EXECUTE dmw_fx_column_stmt;
+DEALLOCATE PREPARE dmw_fx_column_stmt;
+
+SET @dmw_fx_column = IF((SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='economy_market_position' AND column_name='margin_call_quote')=0,
+    'ALTER TABLE economy_market_position ADD COLUMN margin_call_quote BIGINT NULL','SELECT 1');
+PREPARE dmw_fx_column_stmt FROM @dmw_fx_column;
+EXECUTE dmw_fx_column_stmt;
+DEALLOCATE PREPARE dmw_fx_column_stmt;
+
+SET @dmw_fx_column = IF((SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='economy_market_position' AND column_name='margin_call_deadline')=0,
+    'ALTER TABLE economy_market_position ADD COLUMN margin_call_deadline DATETIME(6) NULL','SELECT 1');
+PREPARE dmw_fx_column_stmt FROM @dmw_fx_column;
+EXECUTE dmw_fx_column_stmt;
+DEALLOCATE PREPARE dmw_fx_column_stmt;
+
 -- Preserve the complete existing ENUM, including values introduced by previous releases.
 SET @dmw_fx_reason = (SELECT column_type FROM information_schema.columns
     WHERE table_schema=DATABASE() AND table_name='economy_ledger_entry' AND column_name='reason');

@@ -6,7 +6,7 @@ import json
 import time
 
 WRITES = {"dmw_economy_" + action for action in (
-    "buy", "use_item", "transfer", "rob", "discharge", "bail", "fx_open", "fx_close", "fx_repay")}
+    "buy", "use_item", "transfer", "rob", "discharge", "bail", "fx_open", "fx_close", "fx_repay", "fx_add_margin")}
 STATE_KEY = "dmw_economy_receipts_v1"
 
 

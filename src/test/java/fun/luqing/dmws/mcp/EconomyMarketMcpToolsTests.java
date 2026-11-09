@@ -21,9 +21,9 @@ class EconomyMarketMcpToolsTests {
     final EconomyMarketMcpTools adapter = new EconomyMarketMcpTools(market, identity);
     DmwMcpTools router() { return new DmwMcpTools(mock(TomatoMcpTools.class), identity, mock(ForwardMcpTools.class), mock(EconomyConditionMcpTools.class), adapter); }
 
-    @Test void catalogAndRoutingExposeAllSixToolsAndPropagateFailures() {
+    @Test void catalogAndRoutingExposeAllSevenToolsAndPropagateFailures() {
         var catalog = new McpToolCatalog().definitions();
-        for (String suffix : List.of("market", "positions", "history", "open", "close", "repay")) {
+        for (String suffix : List.of("market", "positions", "history", "open", "close", "repay", "add_margin")) {
             String name = "dmw_economy_fx_" + suffix;
             assertTrue(java.util.stream.StreamSupport.stream(catalog.spliterator(), false).anyMatch(d -> name.equals(d.path("name").asText())));
         }
@@ -35,7 +35,7 @@ class EconomyMarketMcpToolsTests {
 
     @Test void everyFxWriteRequiresSignedContextAndDefaultsAreCoveredByContextTests() {
         var guard = new EconomyMcpContext(new DmwConfig());
-        for (String name : List.of("dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay")) {
+        for (String name : List.of("dmw_economy_fx_open", "dmw_economy_fx_close", "dmw_economy_fx_repay", "dmw_economy_fx_add_margin")) {
             assertTrue(EconomyMcpContext.WRITES.contains(name));
             assertThrows(McpToolException.class, () -> guard.authorize(name, mapper.createObjectNode().put("user_id", 123)));
             assertThrows(McpToolException.class, () -> adapter.execute(name, mapper.createObjectNode()));
@@ -59,14 +59,15 @@ class EconomyMarketMcpToolsTests {
         when(identity.actingUser(args)).thenReturn(123L); when(identity.requestId(args)).thenReturn("r1");
         when(identity.messageOperation(anyString(), any(), anyLong(), anyString(), anyString(), anyString())).thenCallRealMethod();
         when(identity.requiredLong(args, "group_id")).thenReturn(456L); when(identity.requiredLong(args, "_source_message_id")).thenReturn(-77L);
+        when(identity.requiredLong(args, "group_id")).thenReturn(456L);
         String expected = EconomyMessageOperation.id("fx-open", 456, -77, 123, "");
-        when(market.open(123, "", EconomyFxPair.EUR_USD, Side.LONG, new BigDecimal("500.00"), 20, expected))
+        when(market.openInGroup(123, "", EconomyFxPair.EUR_USD, Side.LONG, new BigDecimal("500.00"), 20, expected, 456L))
                 .thenReturn(new EconomyMarketService.ActionResult(9L, new BigDecimal("501.50"), new BigDecimal("0.00"), "开仓成功 #9"));
         var response = adapter.execute("dmw_economy_fx_open", args);
         assertEquals("开仓成功 #9", response.path("display_text").asText());
         assertEquals("501.50", response.path("data").path("amount").asText());
         args.put("pair", "USD/JPY").put("side", "short");
-        when(market.open(123, "", EconomyFxPair.USD_JPY, Side.SHORT, new BigDecimal("500.00"), 20, expected))
+        when(market.openInGroup(123, "", EconomyFxPair.USD_JPY, Side.SHORT, new BigDecimal("500.00"), 20, expected, 456L))
                 .thenThrow(new EconomyException("OPERATION_CONFLICT", "同一消息不能修改开仓参数后重复执行"));
         assertEquals("OPERATION_CONFLICT", router().execute("dmw_economy_fx_open", args).path("structuredContent").path("code").asText());
     }
@@ -91,5 +92,20 @@ class EconomyMarketMcpToolsTests {
             assertTrue(router().execute("dmw_economy_fx_" + suffix, args).path("structuredContent").path("ok").asBoolean());
         }
         verify(market).portfolio(123); verify(market).history(123); verify(market).close(123,"",9,"op"); verify(market).repay(123,"",null,"op");
+    }
+
+    @Test void addMarginSharesCanonicalNativeMessageIdentityAndPropagatesFailures() {
+        var args=mapper.createObjectNode().put("group_id",456).put("user_id",123).put("_source_message_id",-77)
+                .put("request_id","margin1").put("position_id",9).put("amount","500");
+        when(identity.actingUser(args)).thenReturn(123L); when(identity.requestId(args)).thenReturn("margin1");
+        when(identity.requiredLong(args,"position_id")).thenReturn(9L);
+        String expected=EconomyMessageOperation.id("fx-margin",456,-77,123,"");
+        when(identity.messageOperation("fx-margin",args,123,"","fx-margin","margin1")).thenReturn(expected);
+        when(market.addMargin(123,"",9,new BigDecimal("500.00"),expected))
+                .thenReturn(new EconomyMarketService.ActionResult(9L,new BigDecimal("500.00"),BigDecimal.ZERO,"已追加保证金"));
+        assertTrue(router().execute("dmw_economy_fx_add_margin",args).path("structuredContent").path("ok").asBoolean());
+        verify(market).addMargin(123,"",9,new BigDecimal("500.00"),expected);
+        when(market.addMargin(123,"",9,new BigDecimal("500.00"),expected)).thenThrow(new EconomyException("POSITION_CLOSED","已结算"));
+        assertEquals("POSITION_CLOSED",router().execute("dmw_economy_fx_add_margin",args).path("structuredContent").path("code").asText());
     }
 }

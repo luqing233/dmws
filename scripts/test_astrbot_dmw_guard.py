@@ -28,7 +28,7 @@ class GuardTests(unittest.TestCase):
         self.assertIn("不能认定已经成功", final_receipt(event))
         finish(event, "dmw_economy_fx_open", second, self.result({"ok": False, "message": "交易欠款未还清"}))
         self.assertEqual(final_receipt(event), "开仓成功 #1\n\n本次操作未完成：交易欠款未还清")
-        for tool in ("dmw_economy_fx_close", "dmw_economy_fx_repay"):
+        for tool in ("dmw_economy_fx_close", "dmw_economy_fx_repay", "dmw_economy_fx_add_margin"):
             args = {"position_id": 1}
             start(event, tool, args, "s" * 64)
             self.assertIn("_trusted_context", args)

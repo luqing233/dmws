@@ -60,8 +60,14 @@ public class EconomyMarketMcpTools {
                     default -> throw new McpToolException("side 必须为 long 或 short");
                 };
                 if (!args.path("leverage").isIntegralNumber() || !args.path("leverage").canConvertToInt()) throw new McpToolException("leverage 必须为整数");
-                result = market.open(user, "", pair, side, amount(args.path("margin")), args.path("leverage").asInt(),
-                        identity.messageOperation("fx-open", args, user, "", "fx-open", request));
+                result = market.openInGroup(user, "", pair, side, amount(args.path("margin")), args.path("leverage").asInt(),
+                        identity.messageOperation("fx-open", args, user, "", "fx-open", request), identity.requiredLong(args, "group_id"));
+            }
+            case "dmw_economy_fx_add_margin" -> {
+                long position = identity.requiredLong(args, "position_id");
+                if (position <= 0 || !args.path("position_id").isIntegralNumber()) throw new McpToolException("position_id 必须为正整数");
+                result = market.addMargin(user, "", position, amount(args.path("amount")),
+                        identity.messageOperation("fx-margin", args, user, "", "fx-margin", request));
             }
             case "dmw_economy_fx_close" -> {
                 if (!args.path("position_id").isIntegralNumber()) throw new McpToolException("position_id 必须为整数");
@@ -95,7 +101,8 @@ public class EconomyMarketMcpTools {
                 .put("margin", p.margin().toPlainString()).put("leverage", p.leverage()).put("notional", p.notional().toPlainString())
                 .put("opening_fee", p.fee().toPlainString()).put("entry_price", p.entry().toPlainString()).put("current_price", p.current().toPlainString())
                 .put("pnl", p.pnl().toPlainString()).put("net_profit", p.netProfit().toPlainString())
-                .put("opened_at", timestamp(p.openedAt())).put("closed_at", timestamp(p.closedAt())).put("close_receipt", p.closeReceipt());
+                .put("opened_at", timestamp(p.openedAt())).put("closed_at", timestamp(p.closedAt())).put("close_receipt", p.closeReceipt())
+                .put("margin_call_deadline", timestamp(p.marginCallDeadline()));
     }
     private ObjectNode success(String text) {
         return MAPPER.createObjectNode().put("ok", true).put("code", "OK").put("message", text).put("display_text", text);
