@@ -39,7 +39,7 @@ application.yaml
 application.yaml.*
 __pycache__/
 /.playwright-cli/
-/output/playwright/
+/output/
 
 ### GitHub Copilot ###
 .github/copilot-instructions.md
