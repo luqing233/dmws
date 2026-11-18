@@ -24,6 +24,6 @@ class EconomyActionReceiptTests {
     void existingMedicalDebtIsShownAndRepeatedReceiptDoesNotClaimANewCharge() {
         var text = new EconomyConditionService.DischargeReceipt(status(),false,new BigDecimal("100")).message();
         assertTrue(text.startsWith("你已出院")); assertTrue(text.contains("医药费已结算：655.00"));
-        assertTrue(text.contains("医疗欠款：100.00")); assertFalse(text.contains("出院成功"));
+        assertTrue(text.contains("总欠款：100.00")); assertFalse(text.contains("出院成功"));
     }
 }

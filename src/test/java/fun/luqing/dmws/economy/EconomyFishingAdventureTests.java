@@ -25,6 +25,8 @@ class EconomyFishingAdventureTests {
     @Autowired EconomyCombatService combat;
     @Autowired EconomyConditionService conditions;
     @Autowired EconomyFishingEventRepository events;
+    @Autowired EconomyFishingTextRepository textRows;
+    @Autowired EconomyFishingBaitRuleRepository baitRules;
     @Autowired EconomyFishingAttemptRepository attempts;
     @Autowired EconomyFishingCatchRepository catches;
     @Autowired EconomyUserProfileService profiles;
@@ -39,7 +41,6 @@ class EconomyFishingAdventureTests {
     void seed(long user,String amount) {
         admin.adjust(user,user,"钓鱼人",new BigDecimal(amount),true,"adventure-seed-"+user);
         var p=profiles.getOrCreateForUpdate(user,"钓鱼人");p.setFishingRodPurchased(true);
-        combat.profile(user).setFishingAttempts(10);
         items.addItem(user,"fishing-bait-white",1);
     }
     void only(String code) {
@@ -48,36 +49,36 @@ class EconomyFishingAdventureTests {
     @Test void corpsePersistsInvestigationWithoutAddingCrimeAndCannotBeRepeated() {
         seed(98701,"1000");only("corpse");
         conditions.addCrime(conditions.lock(98701,"玩家"),15);
-        var r=fishing.fish(98701,"钓鱼人","corpse-once",123L,"测试鱼塘");
+        var r=FishingTestActions.fish(fishing, 98701,"钓鱼人","corpse-once",123L,"测试鱼塘");
         assertEquals("尸体",r.fishName());assertEquals(new BigDecimal("0.00"),r.netProfit());
         var state=conditions.lock(98701,"玩家");assertEquals(START.plusMinutes(10),state.getJailUntil());assertEquals(15,state.getCrime());
         assertEquals(4,EconomyFishingText.receipt(r).lines().count());
         assertTrue(attempts.findById("corpse-once").orElseThrow().getReceipt().contains("协助调查"));
-        assertThrows(RuntimeException.class,()->fishing.fish(98701,"玩家","corpse-once"));
+        assertThrows(RuntimeException.class,()->FishingTestActions.fish(fishing, 98701,"玩家","corpse-once"));
         assertEquals(new BigDecimal("1000.00"),ledger.balance(98701,EconomyAccountScope.WALLET).balance());
         assertTrue(fishing.recentCatches(98701).isEmpty());
     }
-    @Test void fineCannotOverdrawWalletOrTouchBankAndRecordsActualLoss() {
+    @Test void fineAddsShortfallToDebtAndRecordsTheFullLoss() {
         seed(98702,"25");only("exam");
-        var r=fishing.fish(98702,"玩家","fine-limited");
-        assertEquals(new BigDecimal("25.00"),r.penalty());assertEquals(new BigDecimal("-25.00"),r.netProfit());
+        var r=FishingTestActions.fish(fishing, 98702,"玩家","fine-limited");
+        assertEquals(new BigDecimal("80.00"),r.penalty());assertEquals(new BigDecimal("-80.00"),r.netProfit());
         assertEquals(new BigDecimal("0.00"),r.walletBalance());
-        assertEquals(new BigDecimal("0.00"),ledger.balance(98702,EconomyAccountScope.MAIN_BANK).balance());
-        assertEquals(new BigDecimal("25.00"),attempts.findById("fine-limited").orElseThrow().getPenalty());
+        assertEquals(new BigDecimal("-55.00"),ledger.balance(98702,EconomyAccountScope.MAIN_BANK).balance());
+        assertEquals(new BigDecimal("80.00"),attempts.findById("fine-limited").orElseThrow().getPenalty());
     }
     @Test void successfulOrdinaryCatchStoresGroupAndNicknameSnapshots() {
-        seed(98713,"1000");combat.profile(98713).setFishingAttempts(0);
+        seed(98713,"1000");when(random.weight(10000)).thenReturn(9999L);
         when(random.chance(anyDouble())).thenReturn(true);when(random.fraction()).thenReturn(0.5);
-        fishing.fish(98713,"钓获时昵称","group-snapshot",123L,"钓获时群名");
+        FishingTestActions.fish(fishing, 98713,"钓获时昵称","group-snapshot",123L,"钓获时群名");
         var row=fishing.recentCatches(98713).getFirst();
         assertEquals("钓获时群名",row.getGroupName());assertEquals("钓获时昵称",row.getNickname());
-        assertEquals(123L,row.getGroupId());assertEquals(START,row.getCaughtAt());
+        assertEquals(123L,row.getGroupId());assertTrue(row.getCaughtAt().isAfter(START.plusSeconds(19)));
     }
     @Test void crocodileVictoryStacksOneOfEachBoostPaysBonusAndNeverEntersFishRanking() {
         seed(98703,"1000");only("crocodile");
         items.addItem(98703,"electric-baton",2);profiles.getOrCreateForUpdate(98703,"玩家").setRobBoostCharges(3);
         when(random.chance(anyDouble())).thenReturn(true,false);
-        var r=fishing.fish(98703,"玩家","crocodile-win");
+        var r=FishingTestActions.fish(fishing, 98703,"玩家","crocodile-win");
         assertEquals(new BigDecimal("800.00"),r.reward());assertEquals(new BigDecimal("800.00"),r.netProfit());
         assertEquals(2,profiles.get(98703).getRobBoostCharges());
         assertEquals(80,equipment.view(98703).batons().get(0).energy());assertEquals(100,equipment.view(98703).batons().get(1).energy());
@@ -94,30 +95,62 @@ class EconomyFishingAdventureTests {
         items.addItem(98704,"electric-baton",1);profiles.getOrCreateForUpdate(98704,"玩家").setRobBoostCharges(1);
         when(random.weight(100)).thenReturn(99L);when(random.weight(40)).thenReturn(39L);
         when(random.chance(anyDouble())).thenReturn(false);
-        var r=fishing.fish(98704,"玩家","crocodile-defeat");
+        var r=FishingTestActions.fish(fishing, 98704,"玩家","crocodile-defeat");
         var state=conditions.lock(98704,"玩家");assertEquals(100,state.getInjury());assertEquals(START.plusHours(24),state.getHospitalUntil());
         assertEquals(0,profiles.get(98704).getRobBoostCharges());assertEquals(80,equipment.view(98704).batons().getFirst().energy());
         assertEquals(new BigDecimal("0.00"),r.netProfit());assertTrue(EconomyFishingText.receipt(r).contains("医疗费出院另结"));
     }
     @Test void victoriousButBittenPlayerReceivesFullRewardAndLightHospitalStay() {
         seed(98705,"1000");only("crocodile");when(random.chance(anyDouble())).thenReturn(true);
-        fishing.fish(98705,"玩家","crocodile-bitten-win");
+        FishingTestActions.fish(fishing, 98705,"玩家","crocodile-bitten-win");
         var state=conditions.lock(98705,"玩家");assertEquals(1,state.getInjury());assertEquals(START.plusHours(24),state.getHospitalUntil());
         assertEquals(new BigDecimal("1800.00"),ledger.balance(98705,EconomyAccountScope.WALLET).balance());
     }
     @Test void blueBaitReducesEventProbabilityWithoutConsumingOtherQuality() {
         seed(98706,"1000");profiles.getOrCreateForUpdate(98706,"玩家").setFishingLuckCharges(2);
         when(random.weight(10000)).thenReturn(350L);
-        fishing.fish(98706,"玩家","bait-reduction",null,null,"蓝");
+        FishingTestActions.fish(fishing, 98706,"玩家","bait-reduction",null,null,"蓝");
         verify(random).weight(10000);assertEquals(0,profiles.get(98706).getFishingLuckCharges());
         assertEquals("ESCAPED",attempts.findById("bait-reduction").orElseThrow().getEventCode());
         assertEquals("BLUE",attempts.findById("bait-reduction").orElseThrow().getBaitQuality());
     }
-    @Test void firstTenAttemptsAreProtectedAndInsufficientFundsDoNotAdvanceAttempts() {
-        seed(98707,"1000");combat.profile(98707).setFishingAttempts(0);only("corpse");
-        fishing.fish(98707,"玩家","newcomer");
-        assertNull(conditions.lock(98707,"玩家").getJailUntil());verify(random,never()).weight(10000);
+    @Test void firstCastCanAlreadyTriggerAnInvestigation() {
+        seed(98707,"1000");only("corpse");
+        FishingTestActions.fish(fishing, 98707,"玩家","newcomer");
+        assertEquals(START.plusMinutes(10), conditions.lock(98707,"玩家").getJailUntil());
         assertEquals(1,combat.profile(98707).getFishingAttempts());
+    }
+
+    @Test void databasePoolAndTemplatesCanAddAnEventWithoutChangingJava() {
+        long user = 98714L;
+        seed(user, "1000");
+        var event = new EconomyFishingEvent();
+        event.setCode("test-lantern");
+        event.setName("河灯");
+        event.setKind("MONEY");
+        event.setPoolCode("FESTIVAL");
+        event.setTickets(1);
+        event.setAmountMin(new BigDecimal("42.50"));
+        event.setAmountMax(new BigDecimal("42.50"));
+        event.setEncounterTemplate("{player}发现了{fish}！");
+        event.setDescription("实际奖励{reward}，净额{net}。");
+        events.save(event);
+        var intro = new EconomyFishingTextTemplate();
+        intro.setCode("test-lantern-intro"); intro.setOwnerCode(event.getCode()); intro.setScene("ENCOUNTER");
+        intro.setTemplate("{player}发现了{fish}！"); textRows.save(intro);
+        var rule = baitRules.findById(EconomyBaitQuality.WHITE).orElseThrow();
+        var pool = new EconomyFishingBaitRule.PoolRule();
+        pool.setPoolCode("FESTIVAL");
+        pool.setTicketBudget(9600);
+        pool.setTicketScaleBps(10000);
+        rule.getPools().add(pool);
+        when(random.weight(10000)).thenReturn(400L);
+        var result = FishingTestActions.fish(fishing, user, "船长$1{reward}", "custom-pool");
+        String receipt = EconomyFishingText.receipt(result);
+        assertEquals("船长$1{reward}发现了河灯！", receipt.lines().findFirst().orElseThrow());
+        assertTrue(receipt.contains("实际奖励42.50，净额+42.50。"));
+        assertEquals(new BigDecimal("42.50"), result.reward());
+        assertEquals("test-lantern", attempts.findById("custom-pool").orElseThrow().getEventCode());
     }
     @Test void hourlyDecayKeepsRemainderAcrossReadsAndDoesNotBankFutureReductions() {
         var state=conditions.lock(98708,"玩家");conditions.addCrime(state,16);

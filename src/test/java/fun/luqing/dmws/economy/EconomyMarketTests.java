@@ -281,7 +281,7 @@ class EconomyMarketTests {
         assertEquals(new BigDecimal("1000.00"), market.portfolio(USER).debt());
         var closed = market.close(USER, "", winner.positionId(), "winner-close");
         assertEquals(new BigDecimal("300.00"), closed.debt()); assertEquals(new BigDecimal("0.00"), wallet());
-        assertTrue(closed.displayText().contains("抵扣交易欠款 700.00"));
+        assertTrue(closed.displayText().contains("抵扣欠款 700.00"));
     }
 
     @Test void repaymentIsPartialOrFullAndReplayDoesNotRepayAgain() {
@@ -366,13 +366,13 @@ class EconomyMarketTests {
         assertEquals(Status.CLOSED, positions.findById(pos.positionId()).orElseThrow().getStatus());
     }
 
-    @Test void tradingGapNeverIncreasesExistingMedicalBankDebt() {
+    @Test void tradingGapIsIncludedInTheTotalAlongsideExistingDebt() {
         seed("1255"); open("medical-gap-open", "1000", 100, Side.LONG);
         ledger.chargeHospital(USER, new BigDecimal("400"), "medical-bill", "医疗账单");
         assertEquals(new BigDecimal("-200.00"), ledger.balance(USER, EconomyAccountScope.MAIN_BANK).balance());
         tick(1, "-.02");
         assertEquals(new BigDecimal("-200.00"), ledger.balance(USER, EconomyAccountScope.MAIN_BANK).balance());
-        assertEquals(new BigDecimal("1000.00"), market.portfolio(USER).debt());
+        assertEquals(new BigDecimal("1200.00"), market.portfolio(USER).debt());
     }
 
     @Test void totalMarginLimitAndNetIssuanceBudgetBlockAdditionalRisk() {

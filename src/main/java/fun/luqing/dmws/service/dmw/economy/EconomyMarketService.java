@@ -41,9 +41,10 @@ public class EconomyMarketService {
     private final EconomyOperationService operations;
     private final EconomyLedgerService ledger;
     private final EconomyLedgerQueryService ledgerQueries;
-    private final EconomyPrivateBankLoanRepository loans;
     private final EconomyMarketNoticeRepository notices;
     private final fun.luqing.dmws.config.DmwConfig config;
+    private final EconomyDebtService debtService;
+    private final EconomyDebtQueryService debtQueries;
 
     public ActionResult setTradingEnabled(long actor, boolean enabled, String operationId) {
         if (!config.isMaster(actor)) throw new EconomyException("PERMISSION_DENIED", "只有机器人主人可以开关交易功能");
@@ -129,9 +130,8 @@ public class EconomyMarketService {
         boolean tradingEnabled = state.getTradingEnabled() == null ? rules.isEnabled() : state.getTradingEnabled();
         if (!tradingEnabled || !rules.isAcceptingOpens() || state.getNetIssued().compareTo(rules.getNetIssuanceBudget()) >= 0)
             throw new EconomyException("MARKET_OPEN_PAUSED", "当前暂停新开仓，已有仓位仍可平仓");
-        if (debt(userId).signum() > 0 || ledger.balance(userId, MAIN_BANK).balance().signum() < 0
-                || !loans.findByBorrowerIdAndStatusInOrderByDueAtAsc(userId, List.of(EconomyLoanStatus.ACTIVE, EconomyLoanStatus.OVERDUE)).isEmpty())
-            throw new EconomyException("MARKET_DEBT_OUTSTANDING", "请先还清交易欠款、医疗欠款和私人银行贷款，再开新仓");
+        if (debtQueries.total(userId).signum() > 0)
+            throw new EconomyException("MARKET_DEBT_OUTSTANDING", "请先还清欠款，再开新仓");
         if (margin.compareTo(rules.getMinimumMargin()) < 0 || margin.compareTo(rules.getPositionMarginLimit()) > 0)
             throw new EconomyException("INVALID_MARGIN", "单笔保证金范围：" + money(rules.getMinimumMargin()) + "～" + money(rules.getPositionMarginLimit()));
         List<EconomyMarketPosition> active = positions.findByUserIdAndStatusOrderByIdAsc(userId, Status.OPEN);
@@ -174,12 +174,12 @@ public class EconomyMarketService {
                 .filter(p -> p.getUserId() == userId)
                 .orElseThrow(() -> new EconomyException("POSITION_NOT_FOUND", "找不到你的这个仓位"));
         if (position.getStatus() != Status.OPEN) {
-            return remember(operationId, userId, "CLOSE", fingerprint, positionId, ZERO, debt(userId),
+            return remember(operationId, userId, "CLOSE", fingerprint, positionId, ZERO, debtQueries.total(userId),
                     "该仓位已结算，本次未重复收付。\n" + position.getCloseReceipt());
         }
         EconomyMarketQuote quote = position.getMarginCallQuote() == null ? freshQuote(state) : callQuote(position);
         settle(state, position, quote, operationId, liquidated(position, quote.price(position.getPair())));
-        return remember(operationId, userId, "CLOSE", fingerprint, positionId, position.getPayout(), debt(userId), position.getCloseReceipt());
+        return remember(operationId, userId, "CLOSE", fingerprint, positionId, position.getPayout(), debtQueries.total(userId), position.getCloseReceipt());
     }
 
     /** Add collateral only: nominal exposure and entry price never change. No new loan is created. */
@@ -197,7 +197,7 @@ public class EconomyMarketService {
             throw new EconomyException("POSITION_CLOSED", "该仓位已结算，不能再补保证金");
         if (position.getMarginCallDeadline() != null && !time.now().isBefore(position.getMarginCallDeadline())) {
             forceLiquidate(state, position);
-            return remember(operationId, userId, "MARGIN", fingerprint, positionId, ZERO, debt(userId),
+            return remember(operationId, userId, "MARGIN", fingerprint, positionId, ZERO, debtQueries.total(userId),
                     "补仓期限已到，本次未扣补仓资金。\n" + position.getCloseReceipt());
         }
         amount = exactMoney(amount);
@@ -214,12 +214,12 @@ public class EconomyMarketService {
             // An inadequate top-up does not buy another response window.
             settle(state, position, quote, operationId, true);
             queueNotice(position, "补仓后仍达到80%爆仓线，已按触发价强平。\n" + position.getCloseReceipt());
-            return remember(operationId, userId, "MARGIN", fingerprint, positionId, amount, debt(userId),
+            return remember(operationId, userId, "MARGIN", fingerprint, positionId, amount, debtQueries.total(userId),
                     "补入 " + money(amount) + " 金币后仍不足维持仓位。\n" + position.getCloseReceipt());
         }
         position.setMarginCallQuote(null); position.setMarginCallDeadline(null);
         if (lossRatio(position, quote).compareTo(new BigDecimal("0.55")) < 0) position.setRiskWarned(false);
-        return remember(operationId, userId, "MARGIN", fingerprint, positionId, amount, debt(userId),
+        return remember(operationId, userId, "MARGIN", fingerprint, positionId, amount, debtQueries.total(userId),
                 "已追加保证金 " + money(amount) + " 金币至 #" + positionId + "，总保证金 " + money(position.getMargin())
                         + "\n名义仓位和开仓价不变，当前补仓期限已解除；后续仍可能亏损、穿仓");
     }
@@ -317,22 +317,12 @@ public class EconomyMarketService {
     }
 
     public ActionResult repay(long userId, String nickname, BigDecimal amount, String operationId) {
-        enabled();
-        EconomyMarketState state = lockMarket();
+        lockMarket();
         String fingerprint = fingerprint("REPAY", userId, amount);
         ActionResult replay = replay(operationId, userId, "REPAY", fingerprint);
         if (replay != null) return replay;
-        operations.start(operationId, "MARKET_REPAY", userId, "偿还交易欠款");
-        profiles.getOrCreateForUpdate(userId, nickname);
-        BigDecimal owed = debt(userId);
-        if (owed.signum() <= 0) throw new EconomyException("NO_MARKET_DEBT", "当前没有交易欠款");
-        BigDecimal paid = amount == null ? owed : exactMoney(amount).min(owed);
-        ledger.debitUserWithBankFallback(userId, paid, operationId, MARKET_REPAY, userId, "偿还交易欠款");
-        ledger.debitAccount(debtKey(userId), PLUGIN, userId, paid, operationId, MARKET_REPAY, userId, "减少交易负债");
-        state.setNetIssued(state.getNetIssued().subtract(paid));
-        BigDecimal remaining = owed.subtract(paid);
-        return remember(operationId, userId, "REPAY", fingerprint, null, paid, remaining,
-                "已偿还交易欠款 " + money(paid) + " 金币" + (remaining.signum() > 0 ? "\n剩余交易欠款 " + money(remaining) : "，已还清"));
+        var result = debtService.repay(userId, nickname, amount == null ? null : exactMoney(amount), operationId);
+        return remember(operationId, userId, "REPAY", fingerprint, null, result.paid(), result.remaining(), result.message());
     }
 
     private void settle(EconomyMarketState state, EconomyMarketPosition p, EconomyMarketQuote quote, String op, boolean forced) {
@@ -363,8 +353,8 @@ public class EconomyMarketService {
                 + "\n成交价 " + price(p.getExitPrice()) + "，本笔净收益 " + signed(pnl.subtract(p.getOpeningFee())) + " 金币（已扣开仓费）"
                 + "\n返还钱包 " + money(payout) + " 金币";
         if (extraPaid.signum() > 0) text += "，另扣余额 " + money(extraPaid);
-        if (repaid.signum() > 0) text += "\n已抵扣交易欠款 " + money(repaid);
-        if (newDebt.signum() > 0) text += "\n新增交易欠款 " + money(newDebt) + " 金币，请还清后再开仓";
+        if (repaid.signum() > 0) text += "\n已抵扣欠款 " + money(repaid);
+        if (newDebt.signum() > 0) text += "\n新增欠款 " + money(newDebt) + " 金币，请还清后再开仓";
         p.setCloseReceipt(text);
         p.setMarginCallDeadline(null); p.setMarginCallQuote(null);
     }
@@ -389,7 +379,7 @@ public class EconomyMarketService {
         List<PositionView> views = positions.findByUserIdAndStatusOrderByIdAsc(userId, Status.OPEN).stream().map(p -> view(p, quote)).toList();
         BigDecimal margin = views.stream().map(PositionView::margin).reduce(ZERO, BigDecimal::add);
         BigDecimal floating = views.stream().map(PositionView::pnl).reduce(ZERO, BigDecimal::add);
-        BigDecimal owed = debt(userId);
+        BigDecimal owed = debtQueries.total(userId);
         return new Portfolio(quote == null ? null : quote.getQuotedAt(), quote != null && fresh(quote), margin, floating,
                 owed, margin.add(floating).subtract(owed), views);
     }

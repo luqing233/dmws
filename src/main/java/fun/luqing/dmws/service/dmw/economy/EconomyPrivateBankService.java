@@ -198,7 +198,7 @@ public class EconomyPrivateBankService {
         return loanService.borrow(userId, nickname, codeOrName, amount, days, operationId);
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public RepaymentView repay(
             long userId,
             String nickname,
@@ -214,7 +214,7 @@ public class EconomyPrivateBankService {
         loanService.markOverdueLoans();
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void settleOverdueLoan(long loanId) {
         loanService.settleOverdueLoan(loanId);
     }

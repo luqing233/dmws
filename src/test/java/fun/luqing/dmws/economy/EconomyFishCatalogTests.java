@@ -27,6 +27,7 @@ class EconomyFishCatalogTests {
     @Autowired EconomyFishRepository fishRepository;
     @Autowired EconomyCatalogInitializer initializer;
     @Autowired EconomyFishingService fishing;
+    @Autowired fun.luqing.dmws.repository.dmw.economy.EconomyFishingBaitRuleRepository baitRules;
     @Autowired EconomyUserProfileService profiles;
     @Autowired EconomyUserProfileRepository profileRepository;
     @Autowired EconomyFishingCatchRepository catches;
@@ -72,16 +73,21 @@ class EconomyFishCatalogTests {
 
     @Test void highTierAndDatabaseOnlySpeciesAreActuallyCatchable() {
         var custom = new Fish();
-        custom.setName("数据库新增鱼"); custom.setDescription("无需修改代码即可出钓");
+        custom.setName("数据库新增鱼"); custom.setDescription("{player}收获{fish}，尺寸{size}厘米，售价{reward}金币。");
         custom.setLevel(12); custom.setPrice(80); custom.setDifficulty(30);
         custom.setDimensionsMin(20); custom.setDimensionsMax(20); custom.setSpecial(false);
         fishRepository.saveAndFlush(custom);
         assertFalse(EconomyFishingRules.unlocked(custom, 10));
         seed(94801L, 11);
         select(custom, 11);
-        var result = fishing.fish(94801L, "钓鱼人", "catalog-database-only");
+        var result = FishingTestActions.fish(fishing, 94801L, "钓鱼人", "catalog-database-only");
         assertEquals(custom.getName(), result.fishName());
         assertEquals(new BigDecimal("48.00"), result.reward());
+        assertEquals("钓鱼人收获数据库新增鱼，尺寸20.00厘米，售价48.00金币。", result.fishDescription());
+        assertTrue(fishing.describeCatalog(94801L, 6).contains("尺寸—厘米，售价—金币"));
+        assertEquals(custom.getId(), fishing.recentCatches(94801L).getFirst().getFishId());
+        custom.setEnabled(false);
+        assertFalse(fishing.describeCatalog(94801L, 6).contains("数据库新增鱼"));
         assertEquals(custom.getId(), fishing.recentCatches(94801L).getFirst().getFishId());
     }
 
@@ -91,7 +97,7 @@ class EconomyFishCatalogTests {
         assertTrue(EconomyFishingRules.selectionWeight(named("鲤鱼")) > 1);
         seed(94802L, 100);
         select(special, 100);
-        var result = fishing.fish(94802L, "钓鱼人", "catalog-special");
+        var result = FishingTestActions.fish(fishing, 94802L, "钓鱼人", "catalog-special");
         assertEquals(special.getName(), result.fishName());
         assertEquals(new BigDecimal("30.00"), result.size());
         assertEquals(new BigDecimal("596.00"), result.reward());
@@ -137,13 +143,14 @@ class EconomyFishCatalogTests {
         var pool = fishRepository.findAllByOrderByLevelAscPriceDesc().stream()
                 .filter(item -> EconomyFishingRules.unlocked(item, level))
                 .sorted(Comparator.comparing(item -> Boolean.TRUE.equals(item.getSpecial()))).toList();
-        var probabilities=EconomyFishingRules.probabilities(pool,level,EconomyBaitQuality.WHITE);
+        var probabilities=EconomyFishingRules.probabilities(pool,level,baitRules.findById(EconomyBaitQuality.WHITE).orElseThrow());
         double cursor=0;
         for(int i=0;i<pool.size();i++) {
             if(pool.get(i).getId().equals(target.getId())) {cursor+=probabilities[i]/2;break;}
             cursor+=probabilities[i];
         }
-        when(random.weight(anyLong())).thenReturn((long)(cursor*1_000_000_000L));
+        when(random.weight(1_000_000_000L)).thenReturn((long)(cursor*1_000_000_000L));
+        when(random.weight(10000)).thenReturn(9999L);
         when(random.chance(anyDouble())).thenReturn(true);
         when(random.fraction()).thenReturn(0.5);
     }

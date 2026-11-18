@@ -89,8 +89,14 @@ class EconomyMarketMcpToolsTests {
         var receipt = new EconomyMarketService.ActionResult(9L, BigDecimal.ZERO, BigDecimal.ZERO, "已处理");
         when(market.close(123,"",9,"op")).thenReturn(receipt); when(market.repay(123,"",null,"op")).thenReturn(receipt);
         for (String suffix : List.of("positions", "history", "close", "repay")) {
-            assertTrue(router().execute("dmw_economy_fx_" + suffix, args).path("structuredContent").path("ok").asBoolean());
+            var response = router().execute("dmw_economy_fx_" + suffix, args).path("structuredContent");
+            assertTrue(response.path("ok").asBoolean());
+            if (!suffix.equals("history")) {
+                assertEquals(response.path("data").path("trading_debt"), response.path("data").path("total_debt"));
+                assertFalse(response.path("data").path("total_debt").isMissingNode());
+            }
         }
+        assertTrue(new McpToolCatalog().definitions().toString().contains("Repay unified total debt"));
         verify(market).portfolio(123); verify(market).history(123); verify(market).close(123,"",9,"op"); verify(market).repay(123,"",null,"op");
     }
 

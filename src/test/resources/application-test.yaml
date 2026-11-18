@@ -25,6 +25,7 @@ shiro:
 dmws:
   economy:
     condition-scheduler-enabled: false
+    fishing-scheduler-enabled: false
   bot-id: 0
   bot-name: test
   master: []

@@ -28,6 +28,7 @@ public class EconomyConditionService {
     private final EconomyLedgerService ledger;
     private final EconomyAdventureProperties rules;
     private final EconomyGameTime time;
+    private final EconomyDebtQueryService debts;
 
     /** Profile lock serializes creation and all condition updates. Lock pairs in user-ID order. */
     @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
@@ -150,8 +151,7 @@ public class EconomyConditionService {
     }
 
     private DischargeReceipt receipt(EconomyPlayerCondition state, boolean dischargedNow) {
-        BigDecimal debt = ledger.balance(state.getUserId(), fun.luqing.dmws.enums.EconomyAccountScope.MAIN_BANK)
-                .balance().min(BigDecimal.ZERO).negate();
+        BigDecimal debt = debts.total(state.getUserId());
         return new DischargeReceipt(view(state), dischargedNow, EconomyMoney.normalize(debt));
     }
 
@@ -159,7 +159,7 @@ public class EconomyConditionService {
         public String message() {
             String text = (dischargedNow ? "出院成功\n已缴纳医药费：" : "你已出院\n医药费已结算：")
                     + EconomyMoney.format(status.lastHospitalFee()) + " 金币";
-            if (medicalDebt.signum() > 0) text += "\n医疗欠款：" + EconomyMoney.format(medicalDebt) + " 金币（存入主银行可还款）";
+            if (medicalDebt.signum() > 0) text += "\n总欠款：" + EconomyMoney.format(medicalDebt) + " 金币（还款 <金额或全部>）";
             return text;
         }
     }
@@ -229,12 +229,19 @@ public class EconomyConditionService {
     private Status view(EconomyPlayerCondition state) {
         return new Status(state.getUserId(), state.getCrime(), state.getInjury(), state.getHospitalUntil(), state.getJailUntil(),
                 hospitalFee(state, time.now()), state.getJailUntil() == null ? EconomyMoney.zero() : bailFee(state),
-                state.getLastHospitalFee(), state.getLastMedicalLoan(), state.getLastDischargedAt());
+                state.getLastHospitalFee(), state.getLastMedicalLoan(), state.getLastDischargedAt(), debts.total(state.getUserId()));
     }
 
     public record Status(long userId, int crime, int injury, LocalDateTime hospitalUntil, LocalDateTime jailUntil,
                          BigDecimal currentHospitalFee, BigDecimal bailFee, BigDecimal lastHospitalFee,
-                         BigDecimal lastMedicalLoan, LocalDateTime lastDischargedAt) { }
+                         BigDecimal lastMedicalLoan, LocalDateTime lastDischargedAt, BigDecimal totalDebt) {
+        public Status(long userId, int crime, int injury, LocalDateTime hospitalUntil, LocalDateTime jailUntil,
+                      BigDecimal currentHospitalFee, BigDecimal bailFee, BigDecimal lastHospitalFee,
+                      BigDecimal lastMedicalLoan, LocalDateTime lastDischargedAt) {
+            this(userId, crime, injury, hospitalUntil, jailUntil, currentHospitalFee, bailFee,
+                    lastHospitalFee, lastMedicalLoan, lastDischargedAt, EconomyMoney.zero());
+        }
+    }
     public record BailResult(long helperId, long prisonerId, BigDecimal fee, int prisonerCrime,
                              BigDecimal walletBalance, BigDecimal bankBalance) { }
 }

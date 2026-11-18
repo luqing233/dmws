@@ -70,27 +70,27 @@ class EconomyFishingProgressionTests {
         long owner=94605L;seed(owner,45,true,"1000");
         var old=new EconomyFishingCatch();old.setUserId(owner);old.setFishId(1);old.setFishName("旧鱼");
         old.setSizeCm(new BigDecimal("77.77"));old.setReward(new BigDecimal("123.45"));catches.saveAndFlush(old);
-        when(random.weight(anyLong())).thenReturn(0L);when(random.chance(anyDouble())).thenReturn(true);when(random.fraction()).thenReturn(0.5);
-        var result=fishing.fish(owner,"玩家","new-level45-catch");
+        when(random.weight(10000)).thenReturn(9999L);when(random.chance(anyDouble())).thenReturn(true);when(random.fraction()).thenReturn(0.5);
+        var result=FishingTestActions.fish(fishing, owner,"玩家","new-level45-catch");
         assertEquals("鲤鱼",result.fishName()); assertEquals("力气不小的河鱼",result.fishDescription());
         assertEquals(new BigDecimal("35.00"),result.size()); assertEquals(new BigDecimal("18.80"),result.reward());
         assertEquals(new BigDecimal("18.80"),result.netProfit()); assertEquals(new BigDecimal("1018.80"),result.walletBalance());
         assertEquals(45,profiles.get(owner).getFishingRodLevel());
         assertEquals(new BigDecimal("123.45"),catches.findById(old.getId()).orElseThrow().getReward());
         assertEquals(2,fishing.recentCatches(owner).size());
-        assertThrows(EconomyException.class,()->fishing.fish(owner,"玩家","new-level45-catch"));
+        assertThrows(EconomyException.class,()->FishingTestActions.fish(fishing, owner,"玩家","new-level45-catch"));
         assertEquals(new BigDecimal("1018.80"),ledger.balance(owner,EconomyAccountScope.WALLET).balance());
     }
 
     @Test void failedCatchCostsOnlyTheFishingFeeAndConsumesOneQueuedBaitCharge() {
         long owner=94606L;seed(owner,100,true,"1000");
         profiles.getOrCreateForUpdate(owner,"玩家").setFishingLuckCharges(2);
-        when(random.weight(anyLong())).thenReturn(0L);when(random.chance(anyDouble())).thenReturn(false);
-        var result=fishing.fish(owner,"玩家","failed-catch",null,null,"蓝");
+        when(random.weight(10000)).thenReturn(9999L);when(random.chance(anyDouble())).thenReturn(false);
+        var result=FishingTestActions.fish(fishing, owner,"玩家","failed-catch",null,null,"蓝");
         assertEquals(new BigDecimal("0.00"),result.netProfit());assertEquals(new BigDecimal("1000.00"),result.walletBalance());
         assertEquals(new BigDecimal("22.35"),result.estimatedValueMin());
         assertEquals(new BigDecimal("37.25"),result.estimatedValueMax());
-        assertTrue(EconomyFishingText.receipt(result).contains("据情报人员估价：22.35～37.25金币。"));
+        assertTrue(EconomyFishingText.receipt(result).contains("你四周张望，应该没有人看到吧"));
         assertEquals(0,profiles.get(owner).getFishingLuckCharges());assertEquals(1,baitStates.findById(owner).orElseThrow().getBlueUses());assertTrue(fishing.recentCatches(owner).isEmpty());
     }
 
@@ -102,7 +102,7 @@ class EconomyFishingProgressionTests {
             seed(owner,45,true,"10");
             profiles.getOrCreateForUpdate(owner,"玩家").setFishingLuckCharges(2);
         });
-        assertThrows(EconomyException.class,()->fishing.fish(owner,"玩家","unfunded-fish",null,null,"红"));
+        assertThrows(EconomyException.class,()->FishingTestActions.fish(fishing, owner,"玩家","unfunded-fish",null,null,"红"));
         assertEquals(2,profiles.get(owner).getFishingLuckCharges());
         assertEquals(45,profiles.get(owner).getFishingRodLevel());
         assertEquals(new BigDecimal("10.00"),ledger.balance(owner,EconomyAccountScope.WALLET).balance());
@@ -112,8 +112,8 @@ class EconomyFishingProgressionTests {
     @Test void fixedSizeFishDoesNotThrowAndHigherThanCapLevelsAreRetained() {
         long owner=94607L;seed(owner,125,true,"1000");
         var fish=fishRepository.findAllByOrderByLevelAscPriceDesc().stream().filter(item -> item.getName().equals("鲤鱼")).findFirst().orElseThrow();fish.setDimensionsMin(32);fish.setDimensionsMax(32);fishRepository.saveAndFlush(fish);
-        when(random.weight(anyLong())).thenReturn(0L);when(random.chance(anyDouble())).thenReturn(true);
-        var result=fishing.fish(owner,"玩家","fixed-size-catch");
+        when(random.weight(10000)).thenReturn(9999L);when(random.chance(anyDouble())).thenReturn(true);
+        var result=FishingTestActions.fish(fishing, owner,"玩家","fixed-size-catch");
         assertEquals(new BigDecimal("32.00"),result.size());assertEquals(new BigDecimal("29.80"),result.reward());
         assertEquals(125,profiles.get(owner).getFishingRodLevel());assertTrue(fishing.describeRod(owner).contains("历史原始等级保留"));
     }

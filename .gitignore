@@ -38,6 +38,8 @@ logs/
 application.yaml
 application.yaml.*
 __pycache__/
+/.playwright-cli/
+/output/playwright/
 
 ### GitHub Copilot ###
 .github/copilot-instructions.md

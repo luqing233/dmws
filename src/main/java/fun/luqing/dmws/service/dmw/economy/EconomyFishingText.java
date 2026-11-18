@@ -1,25 +1,66 @@
 package fun.luqing.dmws.service.dmw.economy;
-import fun.luqing.dmws.common.economy.EconomyMoney;
+
+import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/** Literal, single-pass substitution. Dynamic values never become new template expressions. */
 public final class EconomyFishingText {
+    public static final java.util.List<String> COMBAT_PARTS = java.util.List.of("combat_result", "injury_notice", "red_bull", "baton");
+    private static final Pattern PLACEHOLDER = Pattern.compile("\\{([a-z][a-z_0-9]*)}");
     private EconomyFishingText() { }
-    private static String line(String text) {
-        if(text==null) return "";
-        return text.replaceAll("[\\r\\n]+"," ").replaceAll("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\uFE0F]", "").trim();
+
+    public static String receipt(EconomyFishingService.FishingResult result) {
+        return Objects.requireNonNull(result.receiptText(), "Fishing receipt has not been rendered");
     }
-    public static String receipt(EconomyFishingService.FishingResult r) {
-        String name=line(r.fishName()),description=line(r.fishDescription());
-        if(description.isBlank()) description="暂无介绍";
-        boolean event=r.outcomeText()!=null;
-        String first=(!r.success()&&!event)?name+" 脱钩逃走了。":"你钓上了"+(name.equals("尸体")?"一具 ":java.util.Set.of("漂流瓶","神秘包裹","小宝箱","遗失的钱袋","悬赏物品").contains(name)?"一个 ":name.equals("钓鱼佬的留言")?"一张 ":name.equals("靴子")?"一只 ":name.equals("五年高考三年模拟")?"一本 ":"一条 ")+name+"。";
-        if(event && name.equals("挂底")) first="你的鱼钩挂底了。";
-        String outcome=event?line(r.outcomeText()):r.success()?"大小："+EconomyMoney.format(r.size())+"厘米，售价"+EconomyMoney.format(r.reward())+"金币。":"";
-        if(!event && !r.success() && r.estimatedValueMin()!=null && r.estimatedValueMax()!=null) {
-            outcome+="据情报人员估价："+EconomyMoney.format(r.estimatedValueMin());
-            if(r.estimatedValueMin().compareTo(r.estimatedValueMax())!=0) outcome+="～"+EconomyMoney.format(r.estimatedValueMax());
-            outcome+="金币。";
+
+    static String line(String text) {
+        if (text == null) return "";
+        return text.replaceAll("[\\r\\n]+", " ")
+                .replaceAll("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\uFE0F]", "").trim();
+    }
+
+    public static String render(String template, Map<String, String> values) {
+        if (template == null) return "";
+        return PLACEHOLDER.matcher(template).replaceAll(match ->
+                Matcher.quoteReplacement(values.getOrDefault(match.group(1), match.group())));
+    }
+
+    public static boolean validCombatFlow(String template) {
+        if (template == null) return false;
+        String remainder = template;
+        for (String part : COMBAT_PARTS) {
+            String token = "{" + part + "}";
+            if (template.indexOf(token) < 0 || template.indexOf(token) != template.lastIndexOf(token)) return false;
+            remainder = remainder.replace(token, "");
         }
-        if(r.baitNotice()!=null) outcome+=" "+line(r.baitNotice());
-        if(outcome.isBlank()) outcome="未获得售鱼收入。";
-        return first+"\n描述："+description+"\n"+outcome+"\n收益："+(r.netProfit().signum()>0?"+":"")+EconomyMoney.format(r.netProfit())+"金币";
+        if (template.indexOf("{branch}") != template.lastIndexOf("{branch}")) return false;
+        return remainder.replace("{branch}", "").isBlank();
+    }
+
+    public static String fallbackScene(String scene) {
+        return switch (scene) {
+            case "INJURY_WIN", "INJURY_LOSS" -> "INJURY";
+            case "BOOST_RED_BULL_WIN", "BOOST_RED_BULL_LOSS" -> "BOOST_RED_BULL";
+            case "BOOST_BATON_WIN", "BOOST_BATON_LOSS" -> "BOOST_BATON";
+            case "COMBAT_WIN_FLOW", "COMBAT_LOSS_FLOW" -> "COMBAT_FLOW";
+            default -> scene;
+        };
+    }
+
+    public static String combatPartScene(String layout, String part, boolean success) {
+        String scene = switch (part) { case "red_bull" -> "BOOST_RED_BULL"; case "baton" -> "BOOST_BATON"; default -> "INJURY"; };
+        return layout.indexOf("{" + part + "}") > layout.indexOf("{combat_result}")
+                ? scene + (success ? "_WIN" : "_LOSS") : scene;
+    }
+
+    static String catalogDescription(String template, String fish) {
+        var values = new java.util.HashMap<String, String>();
+        for (String key : ("reward penalty amount change bait_cost net size minutes injury injury_score borrowed "
+                + "baton_energy bait bait_color witness estimate min_value max_value description encounter outcome reason").split(" "))
+            values.put(key, "—");
+        values.put("player", "钓鱼人"); values.put("fish", line(fish)); values.put("event", line(fish));
+        return line(render(template, values));
     }
 }

@@ -4,13 +4,17 @@ import com.mikuac.shiro.annotation.GroupMessageHandler;
 import com.mikuac.shiro.annotation.MessageHandlerFilter;
 import com.mikuac.shiro.annotation.common.Shiro;
 import com.mikuac.shiro.core.Bot;
+import com.mikuac.shiro.common.utils.ShiroUtils;
 import com.mikuac.shiro.dto.event.message.GroupMessageEvent;
 import fun.luqing.dmws.common.annotation.CommandInfo;
+import fun.luqing.dmws.common.annotation.EconomyReadOnly;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.entity.dmw.economy.EconomyFishingCatch;
 import fun.luqing.dmws.service.dmw.economy.EconomyFishingService;
+import fun.luqing.dmws.service.dmw.economy.EconomyFishingQueue;
 import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -26,19 +30,34 @@ public class EconomyFishingPlugin {
     private final EconomyPlayerNameService names;
     private final fun.luqing.dmws.config.DmwConfig config;
     private final fun.luqing.dmws.service.dmw.economy.EconomyCombatService combat;
+    private final EconomyFishingQueue queue;
+    @Value("${dmws.economy.fishing-scheduler-enabled:true}")
+    private boolean schedulerEnabled = true;
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(钓鱼|抛竿|fish)(\\s+[白绿蓝紫金红]色?)?$")
-    @CommandInfo(cmd = "钓鱼", desc = "按鱼种、实际尺寸和鱼竿等级结算收入，显示描述与净收益")
+    @CommandInfo(cmd = "钓鱼", desc = "抛竿后等待20～60秒自动收竿，结算后可立即再抛")
     public void fish(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
+            if (!schedulerEnabled) return "钓鱼暂时关闭，请稍后再试。";
             String[] parts=EconomyCommandSupport.plainText(event).split("\\s+");
             String operation=EconomyCommandSupport.operationId("fishing",event);
             String group=EconomyCommandSupport.groupName(bot,event.getGroupId());
-            var result=parts.length==1?fishingService.fish(event.getUserId(),EconomyCommandSupport.nickname(event),operation,event.getGroupId(),group)
-                    :fishingService.fish(event.getUserId(),EconomyCommandSupport.nickname(event),operation,event.getGroupId(),group,parts[1]);
-            return fun.luqing.dmws.service.dmw.economy.EconomyFishingText.receipt(result);
+            var sender = event.getSender();
+            String nickname = sender == null ? "" : EconomyPlayerNameService.visible(
+                    sender.getCard(), sender.getNickname(), event.getUserId());
+            var ticket = fishingService.cast(event.getUserId(), nickname, operation, bot.getSelfId(),
+                    event.getGroupId(), group, event.getMessageId(), parts.length == 1 ? null : parts[1]);
+            return ShiroUtils.escape(ticket.message());
         });
+    }
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^钓鱼状态$")
+    @EconomyReadOnly
+    @CommandInfo(cmd = "钓鱼状态", desc = "查看当前抛竿状态或最近一次收竿回执")
+    public void status(Bot bot, GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot, event, () -> ShiroUtils.escape(queue.status(event.getUserId())));
     }
 
     @GroupMessageHandler
@@ -51,7 +70,7 @@ public class EconomyFishingPlugin {
                     EconomyCommandSupport.nickname(event),
                     EconomyCommandSupport.operationId("fishing-rod-buy", event)
             );
-            return "购买鱼竿成功，当前等级: " + level;
+            return "鱼竿购买成功。\n当前等级：" + level + "级";
         });
     }
 
@@ -65,12 +84,13 @@ public class EconomyFishingPlugin {
                     EconomyCommandSupport.nickname(event),
                     EconomyCommandSupport.operationId("fishing-rod-upgrade", event)
             );
-            return "鱼竿升级成功，当前等级: " + level;
+            return "鱼竿升级成功。\n当前等级：" + level + "级";
         });
     }
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(鱼竿等级|鱼塘等级|钓鱼等级)$")
+    @EconomyReadOnly
     @CommandInfo(cmd = "鱼竿等级", desc = "查看鱼竿等级")
     public void level(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(
@@ -82,25 +102,30 @@ public class EconomyFishingPlugin {
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(钓鱼记录|钓鱼信息)$")
+    @EconomyReadOnly
     @CommandInfo(cmd = "钓鱼信息", desc = "查看最近钓到的鱼")
     public void history(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
             List<EconomyFishingCatch> catches = fishingService.recentCatches(event.getUserId());
             if (catches.isEmpty()) {
-                return "还什么都没有钓到";
+                return "暂无钓获记录。";
             }
             StringBuilder builder = new StringBuilder("最近钓鱼记录");
             for (EconomyFishingCatch item : catches) {
-                builder.append("\n- ").append(item.getFishName())
-                        .append(" ").append(EconomyMoney.format(item.getSizeCm())).append(" cm")
-                        .append("  收入 ").append(EconomyMoney.format(item.getReward())).append(" 金币");
+                builder.append("\n\n鱼种：").append(item.getFishName())
+                        .append("\n大小：").append(EconomyMoney.format(item.getSizeCm())).append("厘米")
+                        .append("\n售鱼收入：").append(EconomyMoney.format(item.getReward())).append("金币");
+                if (item.getCaughtAt() != null) builder.append("\n钓获时间：")
+                        .append(item.getCaughtAt().format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm")));
             }
-            return builder.toString();
+            EconomyCommandSupport.sendTextQuery(bot, event, config, "钓鱼记录", builder.toString());
+            return null;
         });
     }
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(鱼类图鉴|鱼种列表)(\\s+[0-9]+)?$")
+    @EconomyReadOnly
     @CommandInfo(cmd = "鱼类图鉴", desc = "查看数据库鱼种、彩蛋和解锁情况；可加页码")
     public void catalog(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
@@ -110,12 +135,14 @@ public class EconomyFishingPlugin {
                 try { page = Integer.parseInt(parts[1]); }
                 catch (NumberFormatException exception) { return "图鉴页码过大"; }
             }
-            return fishingService.describeCatalog(event.getUserId(), page);
+            EconomyCommandSupport.sendTextQuery(bot, event, config, "鱼类图鉴", fishingService.describeCatalog(event.getUserId(), page));
+            return null;
         });
     }
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(武力值|战斗信息)$")
+    @EconomyReadOnly
     @CommandInfo(cmd = "武力值", desc = "查看抢劫和鳄鱼搏斗共用的武力值")
     public void strength(Bot bot,GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot,event,()->"武力值："+combat.strength(event.getUserId())+"/100；有效胜利每天最多成长2点。");
@@ -123,6 +150,7 @@ public class EconomyFishingPlugin {
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "^(钓鱼排行榜|钓鱼榜)$")
+    @EconomyReadOnly
     @CommandInfo(cmd = "钓鱼排行榜", desc = "合并转发单条鱼价值最高的前十位玩家")
     public void leaderboard(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {

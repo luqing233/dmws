@@ -4,6 +4,7 @@ import com.mikuac.shiro.annotation.common.Shiro;
 import com.mikuac.shiro.core.Bot;
 import com.mikuac.shiro.dto.event.message.GroupMessageEvent;
 import fun.luqing.dmws.common.annotation.CommandInfo;
+import fun.luqing.dmws.common.annotation.EconomyReadOnly;
 import fun.luqing.dmws.service.dmw.economy.*;
 import fun.luqing.dmws.config.*;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +25,16 @@ public class EconomyFishingBaitPlugin {
                 EconomyCommandSupport.plainText(event).split("\\s+")[1],EconomyCommandSupport.operationId("fishing-bait-select",event)));
     }
     @GroupMessageHandler @MessageHandlerFilter(cmd="^(当前鱼饵|我的鱼饵)$")
+    @EconomyReadOnly
     @CommandInfo(cmd="当前鱼饵",desc="查看默认品质、鱼饵包数和剩余次数")
-    public void status(Bot bot,GroupMessageEvent event) { EconomyCommandSupport.execute(bot,event,()->bait.describe(event.getUserId())); }
+    public void status(Bot bot,GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot,event,()->{
+            EconomyCommandSupport.sendTextQuery(bot,event,config,"当前鱼饵",bait.describe(event.getUserId()));
+            return null;
+        });
+    }
     @GroupMessageHandler @MessageHandlerFilter(cmd="^钓鱼商店$")
+    @EconomyReadOnly
     @CommandInfo(cmd="钓鱼商店",desc="查看六档鱼饵及鱼竿购买、升级")
     public void shop(Bot bot,GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot,event,()-> {

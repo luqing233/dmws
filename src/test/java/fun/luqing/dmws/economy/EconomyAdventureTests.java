@@ -136,7 +136,7 @@ class EconomyAdventureTests {
         assertEquals(70, result.injury());
         assertEquals(START.plusHours(24), result.hospitalUntil());
         assertEquals("IN_HOSPITAL", assertThrows(EconomyException.class,
-                () -> fishing.fish(robber, "抢劫者", "hospital-fish")).getCode());
+                () -> FishingTestActions.fish(fishing, robber, "抢劫者", "hospital-fish")).getCode());
         assertEquals("IN_HOSPITAL", assertThrows(EconomyException.class,
                 () -> farm.plant(robber, "抢劫者", "wheat", 1, "hospital-farm")).getCode());
         assertEquals("IN_HOSPITAL", assertThrows(EconomyException.class,

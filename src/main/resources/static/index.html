@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="dark light" />
+        <meta name="description" content="为 DMW 的鱼池投稿新鱼种，预览钓获效果，查询审核进度。" />
+        <title>渔获档案 · 鱼种投稿与审核</title>
+        <link
+            rel="icon"
+            href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%231b5145'/%3E%3Ctext x='32' y='44' text-anchor='middle' fill='%23fff' font-size='40'%3E渔%3C/text%3E%3C/svg%3E"
+        />
+        <script src="/theme.js"></script>
+        <link rel="stylesheet" href="/app.css" />
+        <link rel="stylesheet" href="/theme.css" />
+        <script src="/combat-tree.js" defer></script>
+        <script src="/event-editor.js" defer></script>
+        <script src="/app.js" defer></script>
+    </head>
+    <body>
+        <header class="site-header">
+            <a class="brand" href="#submit" aria-label="渔获档案首页"
+                ><span class="brand-mark">渔</span><span>渔获档案<small>DMW · FISHING ATLAS</small></span></a
+            >
+            <nav aria-label="主要导航">
+                <a href="#submit" data-nav="submit">投稿鱼种</a>
+                <a href="#catalog" data-nav="catalog">鱼池图鉴</a>
+                <a href="#review" data-nav="review">审核工作台 <span class="lock-mark" aria-hidden="true">↗</span></a>
+            </nav>
+            <div class="header-actions">
+                <span class="header-note"><span class="live-dot"></span>一竿，一种可能</span
+                ><button type="button" id="theme-toggle" aria-label="切换到浅色模式">浅色模式</button>
+            </div>
+        </header>
+
+        <main>
+            <section id="view-submit" class="view" aria-labelledby="submit-title">
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">鱼池共创计划 / OPEN CONTRIBUTIONS</p>
+                        <h1 id="submit-title">给鱼池添一条新鱼<span>。</span></h1>
+                        <p class="lead">
+                            一段有趣的描述，一个意想不到的名字。<br />把你的灵感投进来，审核通过后，它就会出现在大家的鱼钩上。
+                        </p>
+                    </div>
+                    <div class="flow-note">
+                        <span><b>01</b> 提交灵感</span><i>→</i><span><b>02</b> 管理员审核</span><i>→</i
+                        ><span><b>03</b> 正式入池</span>
+                    </div>
+                </div>
+
+                <div class="submission-layout">
+                    <div class="form-column">
+                        <div id="submission-success" class="success-panel" hidden>
+                            <span class="success-icon" aria-hidden="true">✓</span>
+                            <div>
+                                <h2>灵感已收到，等待审核</h2>
+                                <p id="success-summary"></p>
+                                <p class="hint">保留查询码，就能随时查看结果。审核通过前不会进入鱼池。</p>
+                                <code id="success-code"></code>
+                                <div class="button-row">
+                                    <button type="button" id="copy-tracking" class="button small">复制进度链接</button
+                                    ><button type="button" id="another-submission" class="text-button">
+                                        继续投稿 →
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="contribution-tabs" role="group" aria-label="投稿类型">
+                            <button type="button" data-create-type="FISH" class="active">普通鱼 / 彩蛋鱼种</button
+                            ><button type="button" data-create-type="EVENT">金币 / 战斗 / 监狱事件</button>
+                        </div>
+                        <form id="submission-form">
+                            <fieldset id="submission-fields">
+                                <fieldset id="fish-type-fields">
+                                    <section class="panel form-section">
+                                        <div class="section-heading">
+                                            <span class="step">01</span>
+                                            <div>
+                                                <h2>先认识这条鱼</h2>
+                                                <p>普通鱼、奇妙生物，或一点不太正经的灵感，都可以。</p>
+                                            </div>
+                                        </div>
+                                        <label class="field"
+                                            >鱼种名称 <span class="required">必填</span
+                                            ><input
+                                                name="name"
+                                                maxlength="80"
+                                                required
+                                                autocomplete="off"
+                                                placeholder="例如：月光鳑鲏"
+                                            /><span class="field-help"
+                                                >最多80字，请与已有鱼种使用不同的名称。</span
+                                            ></label
+                                        >
+                                        <label class="field"
+                                            >鱼种描述 <span class="required">必填</span
+                                            ><textarea
+                                                name="description"
+                                                rows="4"
+                                                maxlength="255"
+                                                required
+                                                placeholder="它是什么模样？上钩时，又会发生怎样的小故事？"
+                                            ></textarea
+                                            ><span class="field-help"
+                                                >会出现在钓获回执中，最多255字。可以使用下方的动态占位符。</span
+                                            ></label
+                                        >
+                                        <div class="placeholder-help">
+                                            <span>可用占位符</span
+                                            ><button type="button" data-placeholder="{player}" title="插入玩家名字">
+                                                {player}</button
+                                            ><button type="button" data-placeholder="{fish}" title="插入鱼种名称">
+                                                {fish}</button
+                                            ><button type="button" data-placeholder="{size}" title="插入实际厘米数">
+                                                {size}</button
+                                            ><button type="button" data-placeholder="{reward}" title="插入实际售鱼收入">
+                                                {reward}
+                                            </button>
+                                        </div>
+                                        <label class="special-switch"
+                                            ><input name="special" type="checkbox" /><span
+                                                class="switch-track"
+                                                aria-hidden="true"
+                                            ></span
+                                            ><span
+                                                ><strong>这是一条彩蛋鱼种</strong
+                                                ><small
+                                                    >进入彩蛋分布，具体遭遇概率由鱼池与鱼饵规则共同决定。</small
+                                                ></span
+                                            ></label
+                                        >
+                                    </section>
+                                    <section class="panel form-section">
+                                        <div class="section-heading">
+                                            <span class="step">02</span>
+                                            <div>
+                                                <h2>设定钓获参数</h2>
+                                                <p>价格是基础价，最终售价还会计算尺寸和鱼竿等级。</p>
+                                            </div>
+                                        </div>
+                                        <div class="field-grid">
+                                            <label class="field"
+                                                >鱼种等级<input
+                                                    name="level"
+                                                    type="number"
+                                                    min="1"
+                                                    max="101"
+                                                    step="1"
+                                                    value="3"
+                                                    required
+                                                /><span class="field-help"
+                                                    >1～101级；鱼竿达到鱼种等级减1后解锁。</span
+                                                ></label
+                                            >
+                                            <label class="field"
+                                                >基础价格 <span class="unit">金币</span
+                                                ><input
+                                                    name="price"
+                                                    type="number"
+                                                    min="1"
+                                                    max="1000000"
+                                                    step="1"
+                                                    value="120"
+                                                    required
+                                                /><span class="field-help"
+                                                    >1～1,000,000的整数，不是固定售出价。</span
+                                                ></label
+                                            >
+                                            <label class="field"
+                                                >最小尺寸 <span class="unit">厘米</span
+                                                ><input
+                                                    name="dimensionsMin"
+                                                    type="number"
+                                                    min="1"
+                                                    max="1000000"
+                                                    step="1"
+                                                    value="20"
+                                                    required
+                                                /><span class="field-help">正整数，两端相同代表固定尺寸。</span></label
+                                            >
+                                            <label class="field"
+                                                >最大尺寸 <span class="unit">厘米</span
+                                                ><input
+                                                    name="dimensionsMax"
+                                                    type="number"
+                                                    min="1"
+                                                    max="1000000"
+                                                    step="1"
+                                                    value="45"
+                                                    required
+                                                /><span class="field-help">不能小于最小尺寸。</span></label
+                                            >
+                                        </div>
+                                        <label class="field"
+                                            >钓获难度<input
+                                                name="difficulty"
+                                                type="number"
+                                                min="0"
+                                                max="1000"
+                                                step="1"
+                                                value="45"
+                                                required
+                                            /><span class="field-help"
+                                                >0～1000。越高越难钓获，也会影响普通鱼的抽取权重；不是直接填写百分比。</span
+                                            ></label
+                                        >
+                                    </section>
+                                </fieldset>
+                                <fieldset id="event-type-fields" class="panel form-section" hidden disabled></fieldset>
+                                <section class="panel form-section">
+                                    <div class="section-heading">
+                                        <span class="step">03</span>
+                                        <div>
+                                            <h2>为你的灵感署名</h2>
+                                            <p>署名仅供管理员审核参考，不作为游戏账号凭据。</p>
+                                        </div>
+                                    </div>
+                                    <label class="field"
+                                        >投稿人昵称<input
+                                            name="author"
+                                            maxlength="40"
+                                            required
+                                            autocomplete="nickname"
+                                            placeholder="怎么称呼你？"
+                                        /><span class="field-help">最多40字，不需要填写QQ号或密码。</span></label
+                                    >
+                                    <p id="submit-error" class="inline-error" role="alert" hidden></p>
+                                    <div class="submit-row">
+                                        <p>提交后等待审核。管理员可能调整数值，<br />原稿和审核意见都会保留。</p>
+                                        <button type="submit" id="submit-button" class="button primary">
+                                            提交审核 <span aria-hidden="true">↗</span>
+                                        </button>
+                                    </div>
+                                </section>
+                            </fieldset>
+                        </form>
+                        <details class="panel progress-panel" id="progress-panel">
+                            <summary>已经投过稿？查询审核进度 <span aria-hidden="true">＋</span></summary>
+                            <form id="progress-form">
+                                <label class="field"
+                                    >投稿查询码<input
+                                        id="progress-code"
+                                        required
+                                        maxlength="36"
+                                        placeholder="提交成功后获得的查询码"
+                                        autocomplete="off" /></label
+                                ><button class="button" type="submit">查询进度</button>
+                            </form>
+                            <div id="progress-result" class="progress-result" role="status" hidden></div>
+                        </details>
+                    </div>
+
+                    <aside class="preview-column" aria-label="钓获预览">
+                        <details id="preview-disclosure" open>
+                            <summary class="preview-summary">查看钓获与事件预览 <span>展开 / 收起</span></summary>
+                            <section class="preview-card">
+                                <div class="preview-heading">
+                                    <span class="eyebrow">上钩之后 / PREVIEW</span
+                                    ><span id="preview-mode" class="tag muted">示例预览</span>
+                                </div>
+                                <div class="fish-art" aria-hidden="true">
+                                    <svg viewBox="0 0 320 155">
+                                        <path class="ripple r1" d="M20 120 Q80 95 140 120 T290 120" />
+                                        <path class="ripple r2" d="M40 140 Q110 115 185 140 T310 140" />
+                                        <g class="fish-drawing">
+                                            <path class="fish-tail" d="M205 66L252 35Q240 75 254 105L205 87" />
+                                            <path class="fish-body" d="M63 76Q126 4 215 76Q126 146 63 76Z" />
+                                            <path class="fish-fin" d="M120 30Q145 3 174 31M122 119L155 139L167 117" />
+                                            <path class="fish-gill" d="M106 52Q124 77 106 101" />
+                                            <circle class="fish-eye" cx="88" cy="68" r="4" />
+                                            <path
+                                                class="fish-scale"
+                                                d="M143 54l-9 11 9 11-9 11 9 11m27-44-9 11 9 11-9 11 9 11"
+                                            />
+                                        </g>
+                                        <circle class="bubble" cx="46" cy="50" r="5" />
+                                        <circle class="bubble" cx="32" cy="30" r="3" />
+                                    </svg>
+                                </div>
+                                <h2 id="preview-name">月光鳑鲏</h2>
+                                <p class="preview-caption">假设成功钓获时的群聊回执</p>
+                                <div id="event-preview-selector" class="event-preview-selector" hidden></div>
+                                <pre id="preview-receipt" class="receipt" aria-live="polite">正在生成预览…</pre>
+                                <label class="rod-control" id="rod-control"
+                                    >预览鱼竿等级 <output id="rod-value" for="rod-level">10级</output
+                                    ><input id="rod-level" type="range" min="1" max="100" step="1" value="10" /><span
+                                        ><small>1级</small><small>100级</small></span
+                                    ></label
+                                >
+                                <div class="preview-metrics">
+                                    <div>
+                                        <span>售价区间</span><strong id="preview-reward">—</strong
+                                        ><small>金币 / 成功钓获</small>
+                                    </div>
+                                    <div>
+                                        <span>白饵钓获率</span><strong id="preview-chance">—</strong
+                                        ><small>遭遇该鱼之后</small>
+                                    </div>
+                                </div>
+                                <p id="preview-unlock" class="unlock-note"></p>
+                                <p class="preview-footnote">
+                                    按已有白饵估算，不含购饵支出。预览不会实际抛竿、扣款或生成钓获记录。
+                                </p>
+                            </section>
+                            <div class="quiet-note">
+                                <span aria-hidden="true">≈</span>
+                                <p>
+                                    <strong>每条鱼都值得认真对待。</strong
+                                    ><br />合理的数值、有趣的描述，比单纯的高售价更容易通过审核。
+                                </p>
+                            </div>
+                        </details>
+                    </aside>
+                </div>
+            </section>
+
+            <section id="view-catalog" class="view" aria-labelledby="catalog-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">已审核入池 / FIELD NOTES</p>
+                        <h1 id="catalog-title">在鱼池里相遇<span>。</span></h1>
+                        <p class="lead">这些鱼种，已经在等待下一位钓鱼人。</p>
+                    </div>
+                    <a class="button primary" href="#submit">投稿新鱼种 ↗</a>
+                </div>
+                <div class="catalog-toolbar">
+                    <p>
+                        <strong id="catalog-total">—</strong> 种鱼已收录 <span class="divider">/</span>
+                        <strong id="catalog-special">—</strong> 种彩蛋
+                    </p>
+                    <form id="catalog-search" class="search-form">
+                        <label class="sr-only" for="catalog-query">搜索鱼种名称</label
+                        ><input id="catalog-query" placeholder="搜索鱼种名称" maxlength="80" /><button
+                            class="button small"
+                            type="submit"
+                        >
+                            搜索
+                        </button>
+                    </form>
+                </div>
+                <div id="catalog-grid" class="catalog-grid" aria-live="polite"></div>
+                <div id="catalog-pagination" class="pagination"></div>
+            </section>
+
+            <section id="view-review" class="view" aria-labelledby="review-title" hidden>
+                <div class="page-heading">
+                    <div>
+                        <p class="eyebrow">审核工作台 / CURATION DESK</p>
+                        <h1 id="review-title">让每条鱼，恰到好处<span>。</span></h1>
+                        <p class="lead">核对描述，衡量数值。把值得期待的灵感带进鱼池。</p>
+                    </div>
+                    <div id="admin-identity" class="admin-identity" hidden>
+                        <span id="admin-name"></span
+                        ><button type="button" id="logout-button" class="text-button">退出登录</button>
+                    </div>
+                </div>
+                <section id="login-panel" class="panel login-panel">
+                    <span class="login-symbol" aria-hidden="true">渔</span>
+                    <h2>管理员登录</h2>
+                    <p>投稿无需登录。审核需要独立的管理员账号。</p>
+                    <form id="login-form">
+                        <label class="field"
+                            >账号<input
+                                name="username"
+                                autocomplete="username"
+                                value="admin"
+                                maxlength="64"
+                                required /></label
+                        ><label class="field"
+                            >密码<input
+                                name="password"
+                                type="password"
+                                autocomplete="current-password"
+                                maxlength="256"
+                                required
+                        /></label>
+                        <p id="login-error" class="inline-error" role="alert" hidden></p>
+                        <button class="button primary full-width" type="submit" id="login-button">
+                            进入审核工作台 →
+                        </button>
+                    </form>
+                    <p id="login-config" class="hint" hidden>站点尚未配置审核登录，请联系管理员。</p>
+                </section>
+                <div id="review-workspace" hidden>
+                    <div class="admin-sections" role="group" aria-label="管理功能">
+                        <button type="button" data-admin-section="moderation" class="active">审核投稿</button
+                        ><button type="button" data-admin-section="fish">管理现有鱼种</button
+                        ><button type="button" data-admin-section="events">管理特殊事件</button>
+                    </div>
+                    <div id="moderation-panel">
+                        <div class="review-toolbar">
+                            <div class="status-tabs" role="group" aria-label="审核状态">
+                                <button type="button" data-status="PENDING" class="active">
+                                    待审核 <span id="count-pending">—</span></button
+                                ><button type="button" data-status="APPROVED">
+                                    已通过 <span id="count-approved">—</span></button
+                                ><button type="button" data-status="REJECTED">
+                                    已驳回 <span id="count-rejected">—</span>
+                                </button>
+                            </div>
+                            <form id="review-search" class="search-form">
+                                <label class="sr-only" for="review-query">搜索投稿名称或投稿人</label
+                                ><input id="review-query" placeholder="搜索鱼种 / 投稿人" maxlength="80" /><button
+                                    class="button small"
+                                    type="submit"
+                                >
+                                    搜索
+                                </button>
+                            </form>
+                        </div>
+                        <div class="review-layout">
+                            <aside class="review-list-column">
+                                <div id="review-list" class="review-list" aria-label="投稿列表"></div>
+                                <div id="review-pagination" class="pagination"></div>
+                            </aside>
+                            <section id="review-detail" class="panel review-detail" aria-live="polite">
+                                <div class="empty-state">
+                                    <span>≈</span>
+                                    <h2>选择一条投稿</h2>
+                                    <p>原稿、数值和审核操作会显示在这里。</p>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                    <section id="fish-manager-panel" hidden>
+                        <div class="catalog-toolbar">
+                            <p>修改立即作用于后续钓鱼；保留鱼种ID及历史结算。</p>
+                            <form id="fish-manager-search" class="search-form">
+                                <label class="sr-only" for="fish-manager-query">查找现有鱼种</label
+                                ><input id="fish-manager-query" placeholder="查找现有鱼种" maxlength="80" /><button
+                                    class="button small"
+                                >
+                                    搜索
+                                </button>
+                            </form>
+                        </div>
+                        <div class="review-layout">
+                            <aside>
+                                <div id="fish-manager-list" class="review-list"></div>
+                                <div id="fish-manager-pagination" class="pagination"></div>
+                            </aside>
+                            <section id="fish-manager-detail" class="panel review-detail"></section>
+                        </div>
+                    </section>
+                    <section id="event-manager-panel" hidden>
+                        <div class="catalog-toolbar">
+                            <p>金币、战斗、监狱事件及其随机文案，统一在这里配置。</p>
+                            <form id="event-manager-search" class="search-form">
+                                <label class="sr-only" for="event-manager-query">查找特殊事件</label
+                                ><input
+                                    id="event-manager-query"
+                                    placeholder="例如：尼罗鳄、尸体"
+                                    maxlength="80"
+                                /><button class="button small">搜索</button>
+                            </form>
+                        </div>
+                        <div class="review-layout">
+                            <aside><div id="event-manager-list" class="review-list"></div></aside>
+                            <section id="event-manager-detail" class="panel review-detail"></section>
+                        </div>
+                    </section>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <span>渔获档案 <small>DMW FISHING ATLAS</small></span>
+            <p>好故事，值得等一竿。<span>审核通过后自动入池，无需重启。</span></p>
+            <a href="#submit">一起丰富这片水域 ↗</a>
+        </footer>
+        <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+        <template id="review-form-template"
+            ><form class="review-form">
+                <div class="detail-heading">
+                    <div>
+                        <p class="eyebrow">投稿详情</p>
+                        <h2 data-detail="name"></h2>
+                        <p class="hint" data-detail="meta"></p>
+                    </div>
+                    <span class="tag" data-detail="status"></span>
+                </div>
+                <details class="original-draft">
+                    <summary>查看原始投稿</summary>
+                    <p data-detail="original"></p>
+                </details>
+                <div class="section-divider">
+                    <span>审核后的资料</span><small>可以调整数值后通过，原稿将保留</small>
+                </div>
+                <label class="field">鱼种名称<input name="name" required maxlength="80" /></label
+                ><label class="field"
+                    >鱼种描述<textarea name="description" required maxlength="255" rows="3"></textarea>
+                </label>
+                <div class="field-grid">
+                    <label class="field"
+                        >鱼种等级<input name="level" type="number" min="1" max="101" step="1" required /></label
+                    ><label class="field"
+                        >基础价格 / 金币<input
+                            name="price"
+                            type="number"
+                            min="1"
+                            max="1000000"
+                            step="1"
+                            required /></label
+                    ><label class="field"
+                        >最小尺寸 / 厘米<input
+                            name="dimensionsMin"
+                            type="number"
+                            min="1"
+                            max="1000000"
+                            step="1"
+                            required /></label
+                    ><label class="field"
+                        >最大尺寸 / 厘米<input
+                            name="dimensionsMax"
+                            type="number"
+                            min="1"
+                            max="1000000"
+                            step="1"
+                            required
+                    /></label>
+                </div>
+                <label class="field"
+                    >钓获难度<input name="difficulty" type="number" min="0" max="1000" step="1" required /></label
+                ><label class="check-line"><input type="checkbox" name="special" /> 彩蛋鱼种</label>
+                <div class="review-preview">
+                    <div class="button-row">
+                        <strong>钓获回执预览</strong
+                        ><button type="button" data-action="preview" class="text-button">刷新预览 ↻</button>
+                    </div>
+                    <pre class="receipt" data-detail="preview">选择“刷新预览”查看10级鱼竿下的钓获效果。</pre>
+                </div>
+                <label class="field"
+                    >审核意见<textarea
+                        name="note"
+                        rows="3"
+                        maxlength="500"
+                        placeholder="通过时可选；驳回时请说明原因，帮助投稿人改进。"
+                    ></textarea>
+                </label>
+                <p class="inline-error" data-detail="error" role="alert" hidden></p>
+                <div class="review-actions">
+                    <button type="button" data-action="reject" class="button danger">驳回投稿</button
+                    ><button type="submit" data-action="approve" class="button primary">通过并入池 ↗</button>
+                </div>
+                <p data-detail="reviewed" class="hint" hidden></p></form
+        ></template>
+        <template id="event-fields-template"
+            ><div class="event-editor">
+                <div class="section-heading">
+                    <span class="step">≈</span>
+                    <div>
+                        <h2>定义一场特殊遭遇</h2>
+                        <p>选择实际效果，再写下这次遭遇的故事。</p>
+                    </div>
+                </div>
+                <details class="event-parameters" open>
+                    <summary>
+                        <strong>01 · 事件与数值</strong><span data-event-summary>先确定事件类型与实际效果</span>
+                    </summary>
+                    <div class="event-parameter-fields">
+                        <div class="field-grid">
+                            <label class="field"
+                                >事件编号<input
+                                    data-eventfield="code"
+                                    required
+                                    maxlength="40"
+                                    pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]{0,39}"
+                                    placeholder="例如 river-crab"
+                                /><span class="field-help">唯一编号，创建后不可修改。</span></label
+                            ><label class="field"
+                                >事件名称<input
+                                    data-eventfield="name"
+                                    required
+                                    maxlength="80"
+                                    placeholder="例如 巨型河蟹"
+                            /></label>
+                        </div>
+                        <div class="field-grid">
+                            <label class="field"
+                                >事件类型<select data-eventfield="kind">
+                                    <option value="MONEY">金币：获得 / 损失 / 纯剧情</option>
+                                    <option value="COMBAT">战斗：胜负、奖金与伤势</option>
+                                    <option value="JAIL">监狱：带回调查 / 服刑</option>
+                                </select></label
+                            ><label class="field"
+                                >抽取分组<select data-eventfield="poolCode">
+                                    <option value="NEGATIVE">通用组 NEGATIVE（白～红饵）</option>
+                                    <option value="COMBAT">战斗组 COMBAT（白～红饵）</option>
+                                    <option value="FUN">趣味组 FUN（红饵）</option>
+                                    <option value="REWARD">奖励组 REWARD（红饵）</option>
+                                </select></label
+                            >
+                        </div>
+                        <label class="field"
+                            >事件抽取权重<input
+                                data-eventfield="tickets"
+                                type="number"
+                                min="0"
+                                max="2147483647"
+                                step="1"
+                                value="10"
+                                required
+                            /><span class="field-help"
+                                >0表示不抽取。白饵通用组10票为每竿0.1%；红饵按组内比例抽取，并非所有鱼饵都是同一概率。</span
+                            ></label
+                        >
+                        <div data-kind-section="MONEY COMBAT">
+                            <div class="section-divider">
+                                <span>金额参数</span
+                                ><small data-kind-section="COMBAT">战斗奖金随本次敌方武力线性计算</small>
+                            </div>
+                            <div class="field-grid">
+                                <label class="field"
+                                    >金额下限 / 金币<input
+                                        data-eventfield="amountMin"
+                                        inputmode="decimal"
+                                        value="20"
+                                        pattern="-?[0-9]+(\.[0-9]{1,2})?"
+                                        required /></label
+                                ><label class="field"
+                                    >金额上限 / 金币<input
+                                        data-eventfield="amountMax"
+                                        inputmode="decimal"
+                                        value="80"
+                                        pattern="-?[0-9]+(\.[0-9]{1,2})?"
+                                        required
+                                /></label>
+                            </div>
+                            <label class="field"
+                                >金额步长<input
+                                    data-eventfield="amountStep"
+                                    inputmode="decimal"
+                                    value="1"
+                                    pattern="[0-9]+(\.[0-9]{1,2})?"
+                                    required
+                                /><span class="field-help"
+                                    >金币事件按此间隔等概率抽取；负数扣款、正数奖励，0只显示剧情。战斗奖金为非负数，步长仅作区间校验。</span
+                                ></label
+                            >
+                        </div>
+                        <div data-kind-section="JAIL" hidden>
+                            <label class="field"
+                                >调查 / 服刑时长 · 分钟<input
+                                    data-eventfield="jailMinutes"
+                                    type="number"
+                                    min="1"
+                                    max="30"
+                                    value="10"
+                                    step="1"
+                                    required
+                                /><span class="field-help">1～30分钟，不额外增加犯罪值。</span></label
+                            >
+                        </div>
+                        <div data-kind-section="COMBAT" hidden>
+                            <div class="section-divider">
+                                <span>战斗参数</span><small>伤势会导致入院，医疗费出院另结</small>
+                            </div>
+                            <div class="field-grid">
+                                <label class="field"
+                                    >敌方武力下限<input
+                                        data-eventfield="strengthMin"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value="60"
+                                        step="1"
+                                        required /></label
+                                ><label class="field"
+                                    >敌方武力上限<input
+                                        data-eventfield="strengthMax"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value="100"
+                                        step="1"
+                                        required /></label
+                                ><label class="field"
+                                    >获胜轻伤概率 / %<input
+                                        data-eventfield="winInjuryPercent"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value="20"
+                                        step="1"
+                                        required /></label
+                                ><label class="field"
+                                    >失败轻伤概率 / %<input
+                                        data-eventfield="lightPercent"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value="50"
+                                        step="1"
+                                        required /></label
+                                ><label class="field"
+                                    >失败中伤概率 / %<input
+                                        data-eventfield="mediumPercent"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value="35"
+                                        step="1"
+                                        required
+                                /></label>
+                            </div>
+                            <p class="hint">失败重伤概率为100%减去轻伤与中伤概率，默认15%。</p>
+                        </div>
+                        <label class="check-line"
+                            ><input type="checkbox" data-eventfield="enabled" checked />
+                            启用此事件（停用仍保留记录）</label
+                        >
+                    </div>
+                </details>
+                <div class="section-divider text-section-heading">
+                    <span>02 · 编排事件流程</span
+                    ><button type="button" class="text-button" data-event-action="open-editor">编辑当前节点 ↗</button>
+                </div>
+                <p class="hint">先选下方分支，再编辑该分支的句子。结果分支只发生一个，道具等附加提示按实际情况追加。</p>
+                <div class="event-branches">
+                    <nav class="branch-navigation" aria-label="事件分支编辑器"></nav>
+                    <aside class="event-inspector" aria-label="文案编辑与预览" hidden>
+                        <div class="inspector-toolbar">
+                            <strong>文案与预览</strong
+                            ><button
+                                type="button"
+                                class="text-button"
+                                data-event-action="close-editor"
+                                aria-label="关闭文案编辑面板"
+                            >
+                                关闭 ×
+                            </button>
+                        </div>
+                        <section class="branch-workspace" aria-label="当前文案分支">
+                            <div class="branch-breadcrumb" data-branch-path></div>
+                            <h3 data-branch-title></h3>
+                            <p class="branch-condition" data-branch-condition></p>
+                            <p class="branch-status" data-branch-status aria-live="polite"></p>
+                            <button type="button" class="text-button branch-reset" data-event-action="reset-default">
+                                恢复默认文案
+                            </button>
+                            <div class="branch-placeholders" aria-label="本分支可用占位符"></div>
+                            <div class="branch-default" data-branch-default></div>
+                            <div class="event-texts"></div>
+                            <button type="button" class="button secondary" data-event-action="copy-default">
+                                基于默认文案编辑
+                            </button>
+                            <button type="button" class="button secondary branch-add" data-event-action="add-text">
+                                ＋ 为此分支添加文案
+                            </button>
+                            <p class="hint">
+                                同一分支的句子按权重随机选一句，如3和1约为75%和25%。未配置启用文案时使用通用文案。
+                            </p>
+                        </section>
+                    </aside>
+                </div>
+            </div></template
+        >
+        <template id="event-text-template"
+            ><div class="event-text-row">
+                <div class="event-text-controls">
+                    <input type="hidden" data-textfield="scene" />
+                    <strong class="text-variant-label"></strong
+                    ><label class="field"
+                        >句子权重<input
+                            data-textfield="weight"
+                            type="number"
+                            min="0"
+                            max="2147483647"
+                            value="1"
+                            step="1"
+                            required /></label
+                    ><button
+                        type="button"
+                        class="text-button remove-text"
+                        data-event-action="remove-text"
+                        aria-label="移除这句文案"
+                    >
+                        移除
+                    </button>
+                </div>
+                <label class="field"
+                    >文案正文<textarea
+                        data-textfield="template"
+                        rows="3"
+                        maxlength="4000"
+                        required
+                        placeholder="为这个场景写一句话…"
+                    ></textarea></label
+                ><label class="check-line"
+                    ><input data-textfield="enabled" type="checkbox" checked /> 启用这句文案</label
+                >
+            </div></template
+        >
+    </body>
+</html>

@@ -1,6 +1,5 @@
 package fun.luqing.dmws.service.dmw.economy;
 
-import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.entity.dmw.economy.EconomyUserProfile;
 import fun.luqing.dmws.repository.dmw.economy.EconomyUserProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class EconomyUserProfileService {
 
+    @jakarta.persistence.PersistenceContext(unitName = "dmw")
+    private jakarta.persistence.EntityManager entityManager;
+
     private final EconomyUserProfileRepository profileRepository;
     private final EconomyUserProfileProvisioner profileProvisioner;
 
@@ -21,15 +23,18 @@ public class EconomyUserProfileService {
             transactionManager = "dmwTransactionManager"
     )
     public EconomyUserProfile getOrCreateForUpdate(long userId, String nickname) {
-        if (profileRepository.findById(userId).isEmpty()) {
+        if (!profileRepository.existsById(userId)) {
             try {
                 profileProvisioner.ensureProfile(userId, nickname);
             } catch (DataIntegrityViolationException ignored) {
                 // Another request won the unique-key race. The profile is now available.
             }
         }
-        EconomyUserProfile profile = profileRepository.findForUpdate(userId)
-                .orElseThrow(() -> new EconomyException("PROFILE_MISSING", "用户经济档案不存在"));
+        EconomyUserProfile profile = entityManager.getReference(EconomyUserProfile.class, userId);
+        if (entityManager.getLockMode(profile) != jakarta.persistence.LockModeType.PESSIMISTIC_WRITE) {
+            // Refresh after waiting for the lock. Reentrant calls must preserve this transaction's edits.
+            entityManager.refresh(profile, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        }
         updateNickname(profile, nickname);
         return profile;
     }
@@ -56,16 +61,7 @@ public class EconomyUserProfileService {
         if (groupId <= 0) {
             return;
         }
-        if (profileRepository.findById(userId).isEmpty()) {
-            try {
-                profileProvisioner.ensureProfile(userId, nickname);
-            } catch (DataIntegrityViolationException ignored) {
-                // Another request created the profile concurrently.
-            }
-        }
-        EconomyUserProfile profile = profileRepository.findForUpdate(userId)
-                .orElseThrow(() -> new EconomyException("PROFILE_MISSING", "用户经济档案不存在"));
-        updateNickname(profile, nickname);
+        EconomyUserProfile profile = getOrCreateForUpdate(userId, nickname);
         if (profile.getRegisterGroupId() == null) {
             profile.setRegisterGroupId(groupId);
             profile.setRegisterGroupName(normalizeGroupName(groupName));

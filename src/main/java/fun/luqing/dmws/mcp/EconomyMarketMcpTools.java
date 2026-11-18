@@ -36,7 +36,8 @@ public class EconomyMarketMcpTools {
             var response = success(EconomyMarketText.portfolio(view));
             var data = response.putObject("data").put("user_id", user).put("quoted_at", timestamp(view.quotedAt())).put("fresh", view.fresh())
                     .put("margin", view.margin().toPlainString()).put("floating_pnl", view.floatingPnl().toPlainString())
-                    .put("trading_debt", view.debt().toPlainString()).put("trading_equity", view.tradingEquity().toPlainString());
+                    .put("trading_debt", view.debt().toPlainString()).put("total_debt", view.debt().toPlainString())
+                    .put("trading_equity", view.tradingEquity().toPlainString());
             var rows = data.putArray("positions"); view.positions().forEach(p -> rows.add(position(p)));
             return response;
         }
@@ -85,7 +86,8 @@ public class EconomyMarketMcpTools {
         ObjectNode response = success(result.displayText());
         ObjectNode data = response.putObject("data");
         if (result.positionId() != null) data.put("position_id", result.positionId());
-        data.put("amount", result.amount().toPlainString()).put("trading_debt", result.debt().toPlainString());
+        data.put("amount", result.amount().toPlainString()).put("trading_debt", result.debt().toPlainString())
+                .put("total_debt", result.debt().toPlainString());
         return response;
     }
 

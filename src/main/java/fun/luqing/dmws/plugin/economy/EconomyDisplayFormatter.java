@@ -24,6 +24,10 @@ public final class EconomyDisplayFormatter {
 
     /** One overview and one node per position/receipt; bounded pages preserve all content. */
     public static List<String> market(String category, String text) {
+        return textPages("交易｜" + category, text);
+    }
+
+    public static List<String> textPages(String title, String text) {
         List<String> bodies = new ArrayList<>();
         for (String section : text.strip().split("\\n\\s*\\n")) {
             while (section.length() > 1600) {
@@ -35,7 +39,7 @@ public final class EconomyDisplayFormatter {
             if (!section.isBlank()) bodies.add(section);
         }
         List<String> nodes = new ArrayList<>();
-        for (int i = 0; i < bodies.size(); i++) nodes.add("【交易｜" + category + (bodies.size() > 1 ? " · " + (i + 1) + "/" + bodies.size() : "") + "】\n" + bodies.get(i));
+        for (int i = 0; i < bodies.size(); i++) nodes.add("【" + title + (bodies.size() > 1 ? " · " + (i + 1) + "/" + bodies.size() : "") + "】\n" + bodies.get(i));
         return List.copyOf(nodes);
     }
 

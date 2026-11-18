@@ -1,6 +1,7 @@
 package fun.luqing.dmws.service.dmw.economy;
 
 import fun.luqing.dmws.entity.dmw.fish.Fish;
+import fun.luqing.dmws.entity.dmw.economy.EconomyFishingBaitRule;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
@@ -29,29 +30,28 @@ public final class EconomyFishingRules {
 
     public static double growth(int level) { return Math.pow((effectiveLevel(level)-1)/99.0,.8); }
 
-    public static double successChance(Fish fish,int level,EconomyBaitQuality bait) {
+    public static double successChance(Fish fish,int level,EconomyFishingBaitRule bait) {
         return chanceBreakdown(fish,level,bait).total();
     }
 
-    public static ChanceBreakdown chanceBreakdown(Fish fish,int level,EconomyBaitQuality bait) {
+    public static ChanceBreakdown chanceBreakdown(Fish fish,int level,EconomyFishingBaitRule bait) {
         double original=Math.max(.25,Math.min(1,.82-fish.getDifficulty()/160.0
                 -Math.max(0,fish.getLevel()-effectiveLevel(level))*.15));
         double rod=Math.min(.15,.30*growth(level)*(1-original));
-        return new ChanceBreakdown(original,rod,bait.successBonus,Math.min(.90,original+rod+bait.successBonus));
+        return new ChanceBreakdown(original,rod,bait.successBonus(),Math.min(.90,original+rod+bait.successBonus()));
     }
 
     public record ChanceBreakdown(double base,double rodBonus,double baitBonus,double total) { }
 
-    public static double ordinaryWeight(Fish fish,int level,EconomyBaitQuality bait) {
+    public static double ordinaryWeight(Fish fish,int level,EconomyFishingBaitRule bait) {
         double tier=Math.pow(Math.clamp((fish.getLevel()-1)/9.0,0,1),1.5);
-        return selectionWeight(fish)*(1+2*growth(level)*tier)*(fish.getLevel()>=7?bait.highFishWeight:1);
+        return selectionWeight(fish)*(1+2*growth(level)*tier)*(fish.getLevel()>=7?bait.highFishWeight():1);
     }
     /** One normalized distribution; preserve baseline special mass independently of ordinary weights. */
-    public static double[] probabilities(java.util.List<Fish> pool,int level,EconomyBaitQuality bait) {
+    public static double[] probabilities(java.util.List<Fish> pool,int level,EconomyFishingBaitRule bait) {
         long specials=pool.stream().filter(f->Boolean.TRUE.equals(f.getSpecial())).count();
         double baseTotal=pool.stream().mapToDouble(EconomyFishingRules::selectionWeight).sum();
-        double specialMass=specials/baseTotal;
-        if(bait==EconomyBaitQuality.RED) specialMass=Math.min(.10,specialMass*3);
+        double specialMass=Math.min(bait.specialCap(), specials/baseTotal*bait.specialMultiplier());
         double ordinaryTotal=pool.stream().filter(f->!Boolean.TRUE.equals(f.getSpecial())).mapToDouble(f->ordinaryWeight(f,level,bait)).sum();
         if(ordinaryTotal==0) specialMass=1;
         double[] result=new double[pool.size()];

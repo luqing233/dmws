@@ -11,6 +11,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class EconomyCommandRoutingTests {
 
     @Test
+    void unifiedRepaymentAndLegacyBankRepaymentHaveDisjointRoutes() throws Exception {
+        var generic = fun.luqing.dmws.plugin.economy.EconomyAccountPlugin.class
+                .getMethod("repay", com.mikuac.shiro.core.Bot.class, com.mikuac.shiro.dto.event.message.GroupMessageEvent.class)
+                .getAnnotation(com.mikuac.shiro.annotation.MessageHandlerFilter.class).cmd();
+        var legacy = fun.luqing.dmws.plugin.economy.EconomyPrivateBankPlugin.class
+                .getMethod("repay", com.mikuac.shiro.core.Bot.class, com.mikuac.shiro.dto.event.message.GroupMessageEvent.class)
+                .getAnnotation(com.mikuac.shiro.annotation.MessageHandlerFilter.class).cmd();
+        for (String message : java.util.List.of("还款 100", "还款 全部", "还款 !")) {
+            assertTrue(matches(generic, message)); assertFalse(matches(legacy, message));
+        }
+        for (String message : java.util.List.of("银行还款 demo 100", "还款 demo 100")) {
+            assertFalse(matches(generic, message)); assertTrue(matches(legacy, message));
+        }
+    }
+
+    @Test
     void fishingRodPurchaseDoesNotMatchGenericItemPurchase() {
         assertFalse(matches(EconomyCommandPatterns.ITEM_BUY, "购买鱼竿"));
         assertFalse(matches(EconomyCommandPatterns.ITEM_BUY, "购买 鱼竿"));

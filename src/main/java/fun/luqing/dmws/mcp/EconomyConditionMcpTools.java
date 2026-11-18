@@ -47,6 +47,7 @@ public class EconomyConditionMcpTools {
                 var response = status(receipt.status(), groupId);
                 response.put("message", receipt.message()).put("display_text", receipt.message());
                 ((ObjectNode) response.path("data")).put("medical_debt", EconomyMoney.format(receipt.medicalDebt()))
+                        .put("total_debt", EconomyMoney.format(receipt.medicalDebt()))
                         .put("discharged_now", receipt.dischargedNow());
                 return response;
             }
@@ -89,7 +90,7 @@ public class EconomyConditionMcpTools {
         ObjectNode result = success("玩家状态查询/结算成功");
         var data = result.putObject("data");
         data.put("user_id", status.userId()).put("user_name", names.resolve(groupId, status.userId()))
-                .put("crime", status.crime()).put("injury", status.injury())
+                .put("crime", status.crime()).put("injury", status.injury()).put("total_debt", EconomyMoney.format(status.totalDebt()))
                 .put("hospital_until", timestamp(status.hospitalUntil())).put("jail_until", timestamp(status.jailUntil()))
                 .put("current_hospital_fee", EconomyMoney.format(status.currentHospitalFee()))
                 .put("bail_fee", EconomyMoney.format(status.bailFee()))

@@ -97,9 +97,9 @@ public class EconomyRobService {
         if (caught) {
             conditions.addCrime(robber, rules.getCrimePerArrest());
             conditions.incarcerate(robber);
-            fine = ledgerService.debitUpTo(robberId, EconomyAccountScope.WALLET,
+            fine = ledgerService.chargeLoss(robberId,
                     EconomyMoney.positive(properties.getRobFine()), operationId, EconomyLedgerReason.ROB_FINE,
-                    robberId, "抢劫被捕罚款");
+                    robberId, "抢劫被捕罚款").fee();
         }
         var record = new EconomyRobRecord();
         record.setRobberId(robberId);

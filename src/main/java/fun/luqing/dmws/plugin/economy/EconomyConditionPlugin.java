@@ -109,7 +109,8 @@ public class EconomyConditionPlugin {
         if (status.lastDischargedAt() != null) text += "\n上次出院: " + EconomyGameText.time(status.lastDischargedAt(), gameTime.now())
                 + "，医疗费 " + EconomyMoney.format(status.lastHospitalFee())
                 + (status.lastMedicalLoan() != null && status.lastMedicalLoan().signum() > 0
-                ? "，新增医疗欠款 " + EconomyMoney.format(status.lastMedicalLoan()) : "");
+                ? "，新增欠款 " + EconomyMoney.format(status.lastMedicalLoan()) : "");
+        if (status.totalDebt().signum() > 0) text += "\n总欠款：" + EconomyMoney.format(status.totalDebt()) + " 金币";
         return text;
     }
 }

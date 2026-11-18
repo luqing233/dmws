@@ -10,6 +10,7 @@ import fun.luqing.dmws.common.economy.EconomyException;
 import fun.luqing.dmws.common.economy.EconomyMoney;
 import fun.luqing.dmws.service.dmw.economy.EconomyPrivateBankService;
 import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
+import fun.luqing.dmws.service.dmw.economy.EconomyDebtQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ public class EconomyPrivateBankPlugin {
 
     private final EconomyPrivateBankService privateBankService;
     private final EconomyPlayerNameService names;
+    private final EconomyDebtQueryService debts;
 
     @GroupMessageHandler
     @MessageHandlerFilter(startWith = {"银行创建"})
@@ -194,13 +196,13 @@ public class EconomyPrivateBankPlugin {
             );
             return "借款成功，贷款编号: " + loan.id()
                     + "\n本金: " + EconomyMoney.format(loan.principal())
-                    + "\n应还: " + EconomyMoney.format(loan.totalDue())
+                    + "\n总欠款: " + EconomyMoney.format(debts.total(event.getUserId()))
                     + "\n到期时间: " + loan.dueAt().toLocalDate();
         });
     }
 
     @GroupMessageHandler
-    @MessageHandlerFilter(startWith = {"银行还款", "还款"})
+    @MessageHandlerFilter(cmd = "^(?:银行还款|还款)\\s+\\S+\\s+\\S+\\s*$")
     @CommandInfo(startWith = "银行还款", desc = "银行还款 <编码或名称> <金额>")
     public void repay(Bot bot, GroupMessageEvent event) {
         EconomyCommandSupport.execute(bot, event, () -> {
@@ -217,7 +219,7 @@ public class EconomyPrivateBankPlugin {
                     EconomyCommandSupport.operationId("private-bank-repay", event)
             );
             return "还款成功: " + EconomyMoney.format(result.repaid())
-                    + "\n银行: " + result.bankCode()
+                    + "\n剩余总欠款: " + EconomyMoney.format(debts.total(event.getUserId()))
                     + (result.unusedAmount().signum() > 0
                     ? "\n未使用金额: " + EconomyMoney.format(result.unusedAmount())
                     : "");

@@ -161,20 +161,38 @@ public class EconomyLedgerService {
         return EconomyMoney.normalize(actual);
     }
 
+    /** Forced losses debit positive funds first and add the full shortfall to debt. */
     @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
-    public MedicalPayment chargeHospital(long userId, BigDecimal amount, String operationId, String description) {
-        BigDecimal fee = EconomyMoney.positive(amount);
-        // Same WALLET -> MAIN_BANK enum order as AccountRef sorting in other debit paths.
+    public MedicalPayment chargeLoss(
+            long userId,
+            BigDecimal requested,
+            String operationId,
+            EconomyLedgerReason reason,
+            Long actorId,
+            String description
+    ) {
+        BigDecimal fee = EconomyMoney.positive(requested);
+        BigDecimal remaining = fee;
+        // Lock both accounts in the shared WALLET -> MAIN_BANK order before changing either.
         EconomyAccount wallet = store.lockOrCreate(userAccountKey(userId), EconomyAccountScope.WALLET, userId);
         EconomyAccount bank = store.lockOrCreate(userAccountKey(userId), EconomyAccountScope.MAIN_BANK, userId);
+        BigDecimal walletPaid = wallet.getBalance().max(BigDecimal.ZERO).min(remaining);
+        if (walletPaid.signum() > 0) {
+            store.change(wallet, walletPaid.negate(), operationId, reason, actorId, description);
+        }
+        remaining = remaining.subtract(walletPaid);
         BigDecimal previousDebt = bank.getBalance().min(BigDecimal.ZERO).negate();
-        BigDecimal walletPaid = wallet.getBalance().max(BigDecimal.ZERO).min(fee);
-        if (walletPaid.signum() > 0) store.change(wallet, walletPaid.negate(), operationId,
-                EconomyLedgerReason.HOSPITAL_FEE, userId, description);
-        BigDecimal bankPaid = fee.subtract(walletPaid);
-        if (bankPaid.signum() > 0) store.medicalDebt(bank, bankPaid, operationId, description);
+        BigDecimal bankPaid = remaining;
+        if (bankPaid.signum() > 0) {
+            store.forcedDebt(bank, bankPaid, operationId, reason, actorId, description);
+        }
         BigDecimal borrowed = bank.getBalance().min(BigDecimal.ZERO).negate().subtract(previousDebt);
         return new MedicalPayment(fee, EconomyMoney.normalize(borrowed), wallet.getBalance(), bank.getBalance());
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY, transactionManager = "dmwTransactionManager")
+    public MedicalPayment chargeHospital(long userId, BigDecimal amount, String operationId, String description) {
+        return chargeLoss(userId, amount, operationId, EconomyLedgerReason.HOSPITAL_FEE, userId, description);
     }
 
     public record MedicalPayment(BigDecimal fee, BigDecimal borrowed, BigDecimal wallet, BigDecimal bank) { }

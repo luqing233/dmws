@@ -23,36 +23,27 @@ public class EconomyBankingService {
     private final EconomyLedgerService ledgerService;
     private final EconomyAccountRepository accountRepository;
     private final EconomyUserProfileRepository profileRepository;
+    private final EconomyDebtQueryService debts;
+    private final EconomyDebtService debtService;
 
     @Transactional(readOnly = true, transactionManager = "dmwTransactionManager")
     public Balances balances(long userId) {
         return new Balances(
                 ledgerService.balance(userId, EconomyAccountScope.WALLET).balance(),
-                ledgerService.balance(userId, EconomyAccountScope.MAIN_BANK).balance()
+                ledgerService.balance(userId, EconomyAccountScope.MAIN_BANK).balance(),
+                debts.total(userId)
         );
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Balances deposit(
             long userId,
             String nickname,
             BigDecimal amount,
             String operationId
     ) {
-        operationService.start(operationId, "BANK_DEPOSIT", userId, "主银行存款");
-        profileService.getOrCreateForUpdate(userId, nickname);
-        EconomyLedgerService.TransferResult result = ledgerService.transferUser(
-                userId,
-                EconomyAccountScope.WALLET,
-                userId,
-                EconomyAccountScope.MAIN_BANK,
-                amount,
-                operationId,
-                EconomyLedgerReason.BANK_DEPOSIT,
-                userId,
-                "主银行存款"
-        );
-        return new Balances(result.from().balance(), result.to().balance());
+        debtService.deposit(userId, nickname, amount, operationId);
+        return balances(userId);
     }
 
     @Transactional(transactionManager = "dmwTransactionManager")
@@ -146,10 +137,13 @@ public class EconomyBankingService {
         }
     }
 
-    public record Balances(BigDecimal wallet, BigDecimal bank) {
+    public record Balances(BigDecimal wallet, BigDecimal bank, BigDecimal totalDebt) {
+        public Balances(BigDecimal wallet, BigDecimal bank) {
+            this(wallet, bank, bank.min(BigDecimal.ZERO).negate());
+        }
         public String format() {
-            return "钱包: " + EconomyMoney.format(wallet) + "，银行: " + EconomyMoney.format(bank)
-                    + (bank.signum() < 0 ? "（医疗欠款，存入主银行可还款，不计息）" : "");
+            return "钱包: " + EconomyMoney.format(wallet) + "，银行: " + EconomyMoney.format(bank.max(BigDecimal.ZERO))
+                    + (totalDebt.signum() > 0 ? "\n总欠款：" + EconomyMoney.format(totalDebt) + " 金币（还款 <金额或全部>）" : "");
         }
     }
 }

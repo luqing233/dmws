@@ -164,7 +164,15 @@ public class EconomyCatalogInitializer implements ApplicationRunner {
                 fish.add(item);
             }
             for (var item : fish) {
-                if (!fishRepository.existsByName(item.getName())) fishRepository.save(item);
+                if (fishRepository.findBySeedName(item.getName()).isPresent()) continue;
+                var existing = fishRepository.findFirstByNameOrderByIdAsc(item.getName());
+                if (existing.isPresent()) {
+                    if (existing.get().getSeedName() == null) {
+                        existing.get().setSeedName(item.getName()); fishRepository.save(existing.get());
+                    }
+                } else {
+                    item.setSeedName(item.getName()); fishRepository.save(item);
+                }
             }
         } catch (IOException exception) {
             throw new IllegalStateException("无法读取默认鱼种目录", exception);

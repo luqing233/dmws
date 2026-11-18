@@ -4,6 +4,7 @@ import fun.luqing.dmws.common.utils.HttpUtil;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
@@ -11,6 +12,7 @@ import java.util.List;
  * SeTuService 用于调用 API 获取 涩图
  */
 @Service
+@Slf4j
 public class SeTuService {
 
     //API 地址
@@ -54,15 +56,22 @@ public class SeTuService {
 
         if (excludeAI != null) params.put("excludeAI", excludeAI);
         // 调用 POST 请求
+        long started = System.nanoTime();
         JSONObject response = HttpUtil.post(LOLICON_API_URL, params);
+        log.info("图站搜索结果: tags={}, r18={}, requested={}, found={}, apiError={}, elapsedMs={}",
+                tagList, r18, num, response.optJSONArray("data") == null ? 0 : response.getJSONArray("data").length(),
+                !response.optString("error").isBlank(), (System.nanoTime() - started) / 1_000_000);
 
         // 安全返回 JSONArray
+        if (!response.optString("error").isBlank()) {
+            return new JSONArray().put(new JSONObject().put("error", response.optString("error")));
+        }
         if (response.has("data") && response.get("data") instanceof JSONArray) {
             return response.getJSONArray("data");
         } else {
             JSONArray errorArray = new JSONArray();
             JSONObject err = new JSONObject();
-            err.put("error", "API返回异常: " + response.toString());
+            err.put("error", "图片服务返回了无法识别的结果");
             errorArray.put(err);
             return errorArray;
         }

@@ -53,6 +53,12 @@ class EconomyMcpToolsTests {
         when(bankingService.balances(10001L)).thenReturn(new EconomyBankingService.Balances(
                 new BigDecimal("1.25"), new BigDecimal("2.50")));
         assertEquals("3.75", tools.balance(MAPPER.createObjectNode()).path("total").asText());
+        when(bankingService.balances(10001L)).thenReturn(new EconomyBankingService.Balances(
+                new BigDecimal("10.00"), new BigDecimal("-20.00"), new BigDecimal("130.00")));
+        var debtBalance = tools.balance(MAPPER.createObjectNode());
+        assertEquals("130.00", debtBalance.path("total_debt").asText());
+        assertEquals("-120.00", debtBalance.path("total").asText());
+        assertTrue(debtBalance.path("display_text").asText().contains("总欠款：130.00"));
         EconomyUserItem stack = new EconomyUserItem();
         stack.setItemCode("red-bull");
         stack.setQuantity(2);

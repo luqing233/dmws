@@ -1,6 +1,26 @@
-# MCP 调用与交互检查（2026-11-04）
+# MCP 调用与交互检查
 
-当前香港生产端已于 2026-11-05 02:20（Asia/Shanghai）上线下载器 v0.3.0 适配，DMW 共 29 个工具；独立下载器保持 24 个工具。此前的经济工具、昵称回执与已确认热力图继续保留。各阶段旧工具数量不代表当前状态。
+当前生产端 DMW 1.1.1 共36个工具，独立番茄下载器0.3.0共24个工具。下载器v0.3适配于2026-11-05上线，钓鱼事件数据库与统一欠款版本于2026-11-14上线。历史记录中的工具数量不代表当前状态。
+
+## 2026-11-14 MCP 验证
+
+2026-11-14 11:43:57（Asia/Shanghai）检查完成。两个服务在宿主机和AstrBot容器内部均通过initialize、initialized通知、ping和tools/list；合计60个工具全部覆盖路由与参数/权限检查，61次线上调用为37次成功、24次预期拒绝，未发现传输或业务故障。无效Token在两端均返回401。
+
+| 范围 | 实际验证 |
+| --- | --- |
+| DMW小说查询 | 本地搜索、书籍、订阅、目录、单章/多章正文、章节检查、更新统计、PNG热力图、下载批次查询及上游诊断成功；读取不补下载，按限制返回正文并保留截断标记 |
+| DMW经济查询 | 普通/钓鱼商店、默认机器人余额和背包、健康状态及位置、外汇行情/持仓/历史成功 |
+| 番茄下载器查询 | 在线状态、全局搜索、预览、书库、更新、历史、任务、书籍状态、已下载章节目录/正文/最新章/批量正文、章节时间、章节检查、批次及诊断成功；worker及共享目录诊断正常 |
+| 经济写入保护 | 10个写入工具缺少可信消息签名时全部返回UNTRUSTED_CONTEXT，未执行操作 |
+| 其他写入保护 | 订阅、退订、更新、取消/重试的确认检查，转发参数检查，下载器提交/取消/重试参数检查均正常；不存在/过期任务返回明确错误 |
+| MySQL隔离副本 | 10个经济写入工具完成成功路径：转账、购买、使用、外汇开仓/补仓/平仓/统一还款、出院、保释、抢劫；使用真实业务服务、可信消息HMAC和MySQL事务，隔离副本完成后删除 |
+| 转发与回归 | 合并转发成功路径使用模拟QQ通道，未向真实QQ发送；69项MCP、后台任务及适配器回归测试通过 |
+
+验证结束生产账本差额0、没有测试账号遗留，外汇交易仍关闭。下载提交/取消/重试及订阅变更本轮只做了参数/权限拦截与回归验证，没有创建新的生产下载、变更生产订阅；QQ真实投递不在本轮验证范围，不能把模拟转发成功当作真实群消息送达证明。
+
+服务器原始证据保存在 `/root/dmws-mcp-verification-20261114`，其中 `report.json` 为摘要，`smoke-results.json`、`followup-results.json` 为逐工具记录，`clone-writes.json` 为隔离事务验证结果。配置凭据和正文响应不进入仓库。
+
+## 调用规范与历史记录
 
 新增工具 `dmw_send_forward_message`，复用现有 `/mcp` 和 Authorization 配置。
 群聊示例：
@@ -35,7 +55,7 @@
 ## 经济查询与身份
 
 - `dmw_economy_shop`：参数 `{}`，返回上架道具代码、名称、说明和精确十进制价格。
-- `dmw_economy_balance`：参数 `{"user_id":123456}`，返回钱包、主银行和两者合计。金额为精确十进制字符串；不含私人银行余额。
+- `dmw_economy_balance`：参数 `{"user_id":123456}`，返回钱包、主银行原始余额、`total_debt`总欠款和`total`净额（钱包+主银行正余额-总欠款）。总欠款包含全部费用、交易亏损和私人银行贷款剩余本金/利息；不含私人银行存款。金额为精确十进制字符串，`display_text`只展示总欠款，不区分类别。
 - `dmw_economy_backpack`：参数 `{"user_id":123456}`，返回持有道具和数量，空背包返回空数组。
 
 以上查询在账号 ID 可确定时无需 QQ 在线。余额和背包省略 user_id 时查询机器人自己的账户；查询聊天用户时显式传入该用户 QQ ID。转账、抢劫省略 user_id 也使用机器人；购买以可信请求者账户扣款。
@@ -71,7 +91,7 @@ AI 使用机器人自己的道具时省略 `user_id`。账号取 `dmws.bot-id`�
 
 人物提示统一使用昵称。余额、背包、状态、位置响应新增 user_name；保释响应含 helper_name、target_name 和简洁 display_text。user_id/target_user_id 等保留给机器定位，AI 不应在普通回复中展示。查询可选传 group_id，以优先显示该群名片；无法实时查询时只读回退已保存昵称，再无名称时显示“这位玩家”，不输出数字QQ号。
 
-操作结果采用简洁回执：出院仅返回“出院成功、已缴纳医药费”，当前主银行仍有医疗欠款时才在 display_text 中显示欠款；重复办理显示“你已出院、医药费已结算”，不暗示再次收费。data 保留既有状态/账单字段，并新增 medical_debt、discharged_now；AI 只有在用户主动查询状态时才展开这些信息。保释成功只显示被保释人昵称及费用，查价时只显示费用或“当前未服刑，无需保释”。
+操作结果采用简洁回执：出院仅返回“出院成功、已缴纳医药费”，当前总欠款大于零时才在 display_text 中显示总欠款；重复办理显示“你已出院、医药费已结算”，不暗示再次收费。data 保留既有状态/账单字段，并新增 total_debt、discharged_now；medical_debt保留为总欠款的兼容别名；AI 只有在用户主动查询状态时才展开这些信息。保释成功只显示被保释人昵称及费用，查价时只显示费用或“当前未服刑，无需保释”。
 
 新增 `dmw_economy_get_location`，可选 user_id，省略查机器人自己。返回 location（HOSPITAL/JAIL/FREE）、location_name、hospital_until/jail_until 及中文 display_text。游戏位置来自当前住院/服刑状态，到期会结算更新，不显示钱包余额。所有伤势统一由本人出院，只有入院满24小时才强制出院。
 
@@ -195,18 +215,24 @@ rob_boost_used现在明确表示本次是否消耗红牛增益，electric_baton_
 | 工具 | 参数 | 返回data |
 |---|---|---|
 | `dmw_economy_fx_market` | 无 | `source=SIMULATED, interval_minutes=10, sequence, quoted_at, fresh, pairs`；pairs含`pair,name,price,change`，change为本轮收益比例 |
-| `dmw_economy_fx_positions` | 可选`user_id`，省略用bot | `user_id,quoted_at,fresh,margin,floating_pnl,trading_debt,trading_equity,positions` |
+| `dmw_economy_fx_positions` | 可选`user_id`，省略用bot | `user_id,quoted_at,fresh,margin,floating_pnl,total_debt,trading_debt,trading_equity,positions` |
 | `dmw_economy_fx_history` | 可选`user_id`，省略用bot | `user_id,records`，最近20笔结算 |
-| `dmw_economy_fx_open` | `group_id,pair,side,margin,leverage,request_id`；可选`user_id` | `position_id,amount,trading_debt`；amount为本次保证金+手续费 |
-| `dmw_economy_fx_close` | `group_id,position_id,request_id`；可选`user_id` | `position_id,amount,trading_debt`；amount为返还钱包金额 |
-| `dmw_economy_fx_repay` | `group_id,amount,request_id`；可选`user_id` | `amount,trading_debt`；amount为实际还款金额 |
-| `dmw_economy_fx_add_margin` | `group_id,position_id,amount,request_id`；可选`user_id` | `position_id,amount,trading_debt`；amount为本次追加保证金，逾期未扣补仓款时为0 |
+| `dmw_economy_fx_open` | `group_id,pair,side,margin,leverage,request_id`；可选`user_id` | `position_id,amount,total_debt,trading_debt`；amount为本次保证金+手续费 |
+| `dmw_economy_fx_close` | `group_id,position_id,request_id`；可选`user_id` | `position_id,amount,total_debt,trading_debt`；amount为返还钱包金额 |
+| `dmw_economy_fx_repay` | `group_id,amount,request_id`；可选`user_id` | `amount,total_debt,trading_debt`；amount为实际还款金额 |
+| `dmw_economy_fx_add_margin` | `group_id,position_id,amount,request_id`；可选`user_id` | `position_id,amount,total_debt,trading_debt`；amount为本次追加保证金，逾期未扣补仓款时为0 |
 
 写入默认actor为bot，只有明确替当前请求人操作时才传可信消息对应的`user_id`，不能使用master或其他群员。
 `side`只能为`long/short`；`leverage`为1～100整数；`margin`为最多两位小数的正数字符串；还款`amount`还支持`all`。
 读结果中的资金、价格、盈亏和涨跌比例均为十进制字符串。仓位字段：`position_id,pair,side,status,margin,leverage,notional,opening_fee,entry_price,current_price,pnl,net_profit,opened_at,closed_at,close_receipt,margin_call_deadline`。
 `status`为`open/closed/liquidated`；`net_profit=pnl-opening_fee`。历史记录`current_price`是平仓价，历史close_receipt不重算。
-`trading_equity`不含钱包和银行；交易欠款与医疗欠款分开，不得把负债账户余额说成可花金币。
+`trading_equity`为保证金+浮盈亏-总欠款，不含钱包和银行；不得把负债账户余额说成可花金币。
+
+统一欠款更新：状态、出院、外汇持仓和动作回执新增`total_debt`。`trading_debt`与出院`medical_debt`仅保留为兼容别名，
+均指该次回执对应的总欠款；`last_medical_loan`仍是原账单的新增欠款快照，不是当前总欠款。
+`dmw_economy_fx_repay`沿用旧工具名和HMAC权限，现统一偿还所有欠款（包括私人银行贷款利息），即使交易未启用也可还款。
+`amount=all`资金不足则整次回滚，数值金额最多收取总欠款；银行收到其贷款对应的还款，保留原合同和流水。
+QQ`还款`与旧`交易还款`、此工具共用`fx-repay`原消息操作号。玩家只显示总欠款，不按来源拆分。
 
 四项写工具都必须经`EconomyMcpContext`验证HMAC，由`scripts/astrbot_dmw_guard`注入真实消息来源。
 原生和MCP共用`fx-open`（空detail，每条来源消息每个操作者最多开一仓）、`fx-close`（仓位编号）、`fx-repay`和`fx-margin`（空detail）的原消息幂等键。
@@ -217,4 +243,4 @@ rob_boost_used现在明确表示本次是否消耗红牛增益，electric_baton_
 60%亏损提醒，80%亏损进入最多5分钟补仓期。`margin_call_deadline`非null时使用锁定的触发价格计算本仓浮盈亏；
 补仓超时、拒绝或不足按触发价强平。仓位状态仍为open直到真正结算。新开仓暂停时补仓仍可执行，限额不变。
 开仓保存可信group_id作为风险提醒群；通知发送在资金事务提交后独立执行，不能用发送失败推断交易失败。
-常见错误：`MARKET_DISABLED, MARKET_NOT_READY, MARKET_STALE, MARKET_OPEN_PAUSED, MARKET_DEBT_OUTSTANDING, MARKET_POSITION_LIMIT, MARKET_DAILY_LIMIT, INVALID_PAIR, INVALID_MARGIN, INVALID_LEVERAGE, POSITION_NOT_FOUND, NO_MARKET_DEBT, INSUFFICIENT_BALANCE`。
+常见错误：`MARKET_DISABLED, MARKET_NOT_READY, MARKET_STALE, MARKET_OPEN_PAUSED, MARKET_DEBT_OUTSTANDING, MARKET_POSITION_LIMIT, MARKET_DAILY_LIMIT, INVALID_PAIR, INVALID_MARGIN, INVALID_LEVERAGE, POSITION_NOT_FOUND, NO_DEBT, INSUFFICIENT_BALANCE`。

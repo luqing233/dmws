@@ -1,0 +1,125 @@
+// Unsaved local drafts only. Run via playwright-cli run-code --filename.
+// prettier-ignore
+async (page) => {
+    if (new URL(page.url()).origin !== "http://127.0.0.1:18002") throw new Error("Local isolated preview only");
+    await page.goto(`http://127.0.0.1:18002/?regression=${Date.now()}#submit`);
+    await page.evaluate(()=>localStorage.removeItem("fishing-theme"));await page.reload();
+    const themeChecks=[];
+    const themeEnsure=(ok,message)=>{if(!ok)throw new Error(message);themeChecks.push(message);};
+    themeEnsure(await page.locator("html").getAttribute("data-theme")==="dark","未设置偏好时默认暗色模式");
+    await page.getByRole("button",{name:"切换到浅色模式",exact:true}).click();
+    themeEnsure(await page.locator("html").getAttribute("data-theme")==="light","主题按钮可切换浅色模式");
+    await page.reload();themeEnsure(await page.locator("html").getAttribute("data-theme")==="light","刷新后保留手动选择的浅色主题");
+    await page.getByRole("button",{name:"切换到暗色模式",exact:true}).click();await page.reload();
+    themeEnsure(await page.locator("html").getAttribute("data-theme")==="dark","暗色选择同样持久化");
+    themeEnsure(await page.evaluate(()=>{
+        const rgb=value=>value.match(/[\d.]+/g).slice(0,3).map(Number);
+        const lum=values=>values.map(x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4;}).reduce((sum,x,i)=>sum+x*[.2126,.7152,.0722][i],0);
+        const style=getComputedStyle(document.body), bg=rgb(style.backgroundColor),fg=rgb(style.color);
+        return bg.every(x=>x<60)&&(lum(fg)+.05)/(lum(bg)+.05)>=7;
+    }),"暗色样式实际生效且正文对比度充足");
+    await page.getByRole("button",{name:"金币 / 战斗 / 监狱事件",exact:true}).click();
+    const root=page.locator("#event-type-fields"), nav=root.getByRole("navigation",{name:"事件分支编辑器"});
+    const editor=root.locator(".event-inspector"), receipt=page.locator("#preview-receipt");
+    const checks=[...themeChecks], ensure=(value,message)=>{if(!value)throw new Error(message);checks.push(message);};
+    const wait=(selector,text)=>page.waitForFunction(({selector,text})=>document.querySelector(selector)?.textContent.includes(text),{selector,text});
+    const draft=()=>root.evaluate(el=>window.FishingEventUI.read(el));
+    const state=()=>root.evaluate(el=>window.FishingCombatTree.read(window.FishingEventUI.read(el).texts));
+    async function kind(value) {
+        const details=root.locator(".event-parameters");if(!await details.evaluate(el=>el.open))await details.locator(":scope > summary").click();
+        await root.locator('[data-eventfield="kind"]').selectOption(value);
+        await page.waitForFunction(value=>[...document.querySelectorAll("#event-preview-selector .result-button")].some(button=>button.textContent==={COMBAT:"战斗获胜",MONEY:"获得金币",JAIL:"进入调查/监狱"}[value]),value);
+        await details.locator(":scope > summary").click();
+    }
+    async function pick(scene) {
+        const base=scene==="COMBAT_LOSS"?"COMBAT_WIN":scene.endsWith("FLOW")?"COMBAT_FLOW":scene.replace(/^(BOOST_RED_BULL|BOOST_BATON|INJURY)_(WIN|LOSS)$/,"$1");
+        await nav.locator(`[data-branch="${base}"]`).click();
+        const variant=["INJURY","BOOST_BATON","BOOST_RED_BULL"].includes(base);
+        const choice=scene==="COMBAT_LOSS"||variant && scene.endsWith("_LOSS")?"失败文案":variant && scene.endsWith("_WIN")?"成功文案":scene==="COMBAT_WIN_FLOW"?"成功顺序":scene==="COMBAT_LOSS_FLOW"?"失败顺序":null;
+        if(choice)await editor.locator(".editor-scope-choices").getByRole("button",{name:choice,exact:true}).click();
+    }
+    async function edit(scene,text) {
+        await pick(scene);await editor.getByRole("button",{name:"基于默认文案编辑",exact:true}).click();
+        await editor.locator(`[data-scene="${scene}"] textarea`).last().fill(text);
+    }
+    await wait('#event-type-fields [data-branch="DESCRIPTION"]',"使用通用文案");
+    ensure(await nav.locator('[data-branch^="BOOST_"]').count()===0,"金币事件不显示战斗和道具选项");
+    ensure((await draft()).texts.length===0,"未修改时直接继承数据库默认文案");
+    ensure(await root.locator('select[data-textfield="scene"]').count()===0,"移除每句文案的长场景下拉框");
+    await pick("MONEY_LOSS");await wait("#preview-receipt","不会触发此分支");
+    await root.locator('[data-eventfield="amountMin"]').fill("-20");await wait("#preview-receipt","-20.00");
+    ensure(true,"金额调整后自动刷新对应可发生结果");
+    await kind("COMBAT");await pick("BOOST_BATON");
+    ensure(await editor.locator(".editor-scope-choices").getByRole("button",{name:"成功文案",exact:true}).count()===1 && await editor.locator(".editor-scope-choices").getByRole("button",{name:"失败文案",exact:true}).count()===1,"原侧栏项目编辑区提供成功、失败两个选项");
+    ensure(await editor.evaluate(el=>getComputedStyle(el).position)==="static","项目编辑保持在侧栏旁，无弹出画布或浮动窗口");
+    await edit("BOOST_BATON","通用电棍余电{baton_energy}。");await wait("#preview-receipt","通用电棍余电80");
+    await edit("BOOST_BATON_WIN","成功电棍余电{baton_energy}。");await wait("#preview-receipt","成功电棍余电80");
+    await edit("BOOST_BATON_LOSS","失败电棍余电{baton_energy}。");await wait("#preview-receipt","失败电棍余电80");
+    ensure(!(await receipt.textContent()).includes("成功电棍"),"失败结果只显示失败专属道具文案");
+    await pick("BOOST_BATON_WIN");await wait("#preview-receipt","成功电棍余电80");
+    ensure(!(await receipt.textContent()).includes("失败电棍"),"成功结果只显示成功专属道具文案");
+    await editor.getByRole("button",{name:"恢复默认文案",exact:true}).click();await wait("#preview-receipt","通用电棍余电80");
+    ensure(true,"恢复成功默认不会影响失败专属文案，并回退通用内容");
+    await editor.getByRole("button",{name:"基于默认文案编辑",exact:true}).click();
+    ensure(await editor.locator('[data-scene="BOOST_BATON_WIN"] textarea').last().evaluate(el=>el===document.activeElement),"再次编辑默认时聚焦新启用文案");
+    await editor.getByRole("button",{name:"恢复默认文案",exact:true}).click();
+    await edit("INJURY_WIN","赢了也住院：{injury}（{injury_score}），医疗费出院另结。");await wait("#preview-receipt","赢了也住院：轻伤（1）");
+    await edit("INJURY_LOSS","输了住院：{injury}（{injury_score}），医疗费出院另结。");await wait("#preview-receipt","输了住院：中伤（40）");
+    ensure(!(await receipt.textContent()).includes("赢了也住院"),"失败住院与成功住院文案独立");
+    await pick("COMBAT_WIN");await page.waitForFunction(()=>!document.querySelector("#preview-receipt").textContent.includes("输了住院"));
+    ensure(!(await receipt.textContent()).includes("赢了也住院"),"获胜未受伤时不出现住院提示");
+    await page.locator("#event-preview-selector").getByRole("button",{name:"战斗获胜并入院",exact:true}).click();
+    ensure((await receipt.textContent()).includes("赢了也住院"),"支持独立预览战斗获胜并住院");
+    await kind("MONEY");ensure(await nav.locator('[data-branch^="BOOST_"]').count()===0,"切换金币时道具入口同步移除");
+    ensure((await draft()).texts.some(text=>text.scene==="BOOST_BATON_LOSS" && text.template.includes("失败电棍")),"事件类型切换保留各结果草稿");
+    await kind("JAIL");ensure(await nav.locator('[data-branch="JAIL"]').count()===1 && await nav.locator('[data-branch^="BOOST_"]').count()===0,"监狱事件只显示自己的结果项目");
+    await kind("COMBAT");await pick("COMBAT_FLOW");
+    await editor.getByRole("button",{name:"将使用红牛放入共用过程",exact:true}).click();
+    await editor.getByRole("button",{name:"将使用电棍放入共用过程",exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector("#preview-receipt").textContent.indexOf("红牛") < document.querySelector("#preview-receipt").textContent.indexOf("你成功制服"));
+    ensure((await state()).common.join(",")==="red_bull,baton","项目顺序支持把红牛、电棍安排在结果前");
+    const order=editor.locator(".project-order-list");
+    await order.getByRole("button",{name:"拖动共用电棍",exact:true}).dragTo(order.locator('[data-combat-part="red_bull"]'),{targetPosition:{x:15,y:3}});
+    ensure((await state()).common.join(",")==="baton,red_bull","真实鼠标拖动可以修改叙述顺序");
+    await order.getByRole("button",{name:"上移共用红牛",exact:true}).click();
+    ensure((await state()).common.join(",")==="red_bull,baton","手机上下移动按钮与拖动共用同一顺序");
+    await pick("BOOST_BATON");await wait("#preview-receipt","通用电棍余电80");
+    ensure(await editor.locator(".editor-scope-choices").getByRole("button",{name:"成功文案",exact:true}).count()===0 && await editor.locator(".editor-scope-choices").getByRole("button",{name:"失败文案",exact:true}).count()===0,"战斗结果之前只显示通用文案选项");
+    ensure((await draft()).texts.some(text=>text.scene==="BOOST_BATON_LOSS"&&text.enabled&&text.template.includes("失败电棍")),"前置项目的旧专属文案保留但不参与显示");
+    const sortScopes = nav.getByRole("group",{name:"侧栏排序范围"});
+    await sortScopes.getByRole("button",{name:"同步",exact:true}).click();
+    const sidebarOrder = nav.locator(".navigation-sort-list");
+    const sidebarParts = () => sidebarOrder.locator("[data-sort-part]").evaluateAll(items=>items.map(item=>item.dataset.sortPart));
+    await sidebarOrder.getByRole("button",{name:"拖动排序：红牛",exact:true}).dragTo(sidebarOrder.locator('[data-sort-part="combat_result"]'),{targetPosition:{x:10,y:3}});
+    ensure((await sidebarParts())[0]==="red_bull","直接拖动左侧红牛项目即可改变顺序");
+    await sidebarOrder.getByRole("button",{name:"拖动排序：电棍",exact:true}).dragTo(sidebarOrder.locator('[data-sort-part="combat_result"]'),{targetPosition:{x:10,y:3}});
+    await page.waitForFunction(()=>{const text=document.querySelector("#preview-receipt").textContent;return text.indexOf("红牛")>=0 && text.indexOf("红牛")<text.indexOf("电棍") && text.indexOf("电棍")<text.indexOf("你成功制服");});
+    ensure((await state()).common.join(",")==="red_bull,baton","左侧同步拖动后完整回执按红牛电棍结果顺序显示");
+    await sortScopes.getByRole("button",{name:"成功",exact:true}).click();
+    await sidebarOrder.getByRole("button",{name:"拖动排序：住院",exact:true}).dragTo(sidebarOrder.locator('[data-sort-part="combat_result"]'),{targetPosition:{x:10,y:3}});
+    const afterSuccess=await state(), successOrder=[...afterSuccess.common,...afterSuccess.win], failureOrder=[...afterSuccess.common,...afterSuccess.loss];
+    ensure(successOrder.indexOf("injury_notice")<successOrder.indexOf("combat_result") && failureOrder.indexOf("injury_notice")>failureOrder.indexOf("combat_result"),"侧栏成功排序独立生效，不改失败路径");
+    await pick("INJURY");
+    ensure(await editor.locator(".editor-scope-choices").getByRole("button",{name:"成功文案",exact:true}).count()===0 && await editor.locator(".editor-scope-choices").getByRole("button",{name:"失败文案",exact:true}).count()===1,"两条路径位置不同时按各自结果位置开放选项");
+    await sortScopes.getByRole("button",{name:"失败",exact:true}).click();
+    await sidebarOrder.getByRole("button",{name:"上移侧栏电棍",exact:true}).click();
+    const afterFailure=await state();
+    ensure([...afterFailure.common,...afterFailure.win].join(",")===successOrder.join(",") && [...afterFailure.common,...afterFailure.loss][0]==="baton","侧栏失败排序独立生效，按钮操作不改成功路径");
+    await sortScopes.getByRole("button",{name:"同步",exact:true}).click();
+    await sidebarOrder.getByRole("button",{name:"下移侧栏红牛",exact:true}).click();
+    const synchronized=await state();
+    ensure([...synchronized.common,...synchronized.win].join(",")===[...synchronized.common,...synchronized.loss].join(","),"侧栏同步排序确实恢复两条一致路径");
+    await sidebarOrder.getByRole("button",{name:"拖动排序：电棍",exact:true}).dragTo(sidebarOrder.locator('[data-sort-part="injury_notice"]'),{targetPosition:{x:10,y:3}});
+    await pick("BOOST_BATON_LOSS");await wait("#preview-receipt","失败电棍余电80");
+    ensure(true,"项目移回战斗结果后恢复原有成功失败文案");
+    await page.locator("#event-preview-selector").getByRole("checkbox",{name:"模拟使用电棍",exact:true}).uncheck();
+    ensure(!(await receipt.textContent()).includes("电棍余电"),"未实际模拟使用道具时不显示其专属提示");
+    await page.setViewportSize({width:390,height:844});
+    ensure(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),"手机布局没有横向溢出");
+    await page.setViewportSize({width:1440,height:1050});
+    await page.getByRole("button",{name:"普通鱼 / 彩蛋鱼种",exact:true}).click();
+    ensure(await page.locator("#preview-receipt").count()===1,"切回普通鱼保留唯一可用预览");
+    await page.getByRole("button",{name:"金币 / 战斗 / 监狱事件",exact:true}).click();
+    ensure(await page.locator("#preview-receipt").count()===1,"再次切回事件没有丢失预览节点");
+    return {passed:checks.length,checks,submissions:0,productionWrites:0};
+}

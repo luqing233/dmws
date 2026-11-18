@@ -184,7 +184,7 @@ public class McpToolCatalog {
                 useItemSchema));
 
         tools.add(tool("dmw_economy_status",
-                "Read player crime, injury, hospital/jail end times and current medical/bail fees. Settles overdue stays exactly once and may charge medical debt to main bank. "
+                "Read player crime, injury, hospital/jail end times and current medical/bail fees. Settles overdue stays exactly once and may add unpaid fees to total debt. Returns total_debt; report only the total in human replies. "
                         + "No QQ connection is needed if the account ID is known. Pass user_id for a user; omit for the bot's own account (never the local operator/master). Times use the configured economy timezone.",
                 objectSchema(List.of(), property("user_id", "integer", "Player QQ ID; defaults to bot's own account"),
                         property("group_id", "integer", "Optional current group for group-card name resolution"))));
@@ -238,7 +238,7 @@ public class McpToolCatalog {
                 objectSchema(List.of("job_id"), property("job_id", "string", "Job ID returned by dmw_update_book"))));
         tools.add(tool("dmw_economy_shop", "List shop items with codes, names, descriptions, effect_type, manual_usable and exact decimal prices. category defaults to general (excludes bait); fishing lists six lucky bait qualities, each package gives five casts. Returns category and count. Native 钓鱼商店 also shows rod purchase/upgrade. Read-only, no QQ connection needed.",
                 objectSchema(List.of(), property("category", "string", "general or fishing; defaults to general"))));
-        tools.add(tool("dmw_economy_balance", "Read wallet and main-bank balances as exact decimal strings. No QQ connection needed. "
+        tools.add(tool("dmw_economy_balance", "Read wallet, main-bank balances, total_debt and net total as exact decimal strings. total_debt combines all unpaid fees, trading losses and private-bank loan principal/interest. Human replies must show only total debt, without categories. No QQ connection needed. "
                 + "Omit user_id for the bot's own account; pass the requesting user's ID to query that user. "
                 + "Use as_bot=true without user_id to query the bot's own account instead. Bot identity needs dmws.bot-id or one connected bot.",
                 objectSchema(List.of(), property("user_id", "integer", "QQ user ID; defaults to bot's own account"),
@@ -251,7 +251,7 @@ public class McpToolCatalog {
                         property("group_id", "integer", "Optional current group for group-card name resolution"),
                         property("as_bot", "boolean", "Query bot's own backpack; cannot combine true with user_id"))));
         tools.add(tool("dmw_economy_fx_market", "Read the shared simulated FX market. Four pairs update every 10 minutes at :00/:10/:20/:30/:40/:50. These are game prices, not real exchange rates. fresh=false means trading is paused until a new tick; queries never advance prices.", objectSchema(List.of())));
-        tools.add(tool("dmw_economy_fx_positions", "Read open positions, floating PnL, trading debt and trading equity (excludes wallet/bank). Omit user_id for bot. Does not create players or settle positions. margin_call_deadline is non-null during the persisted response window; displayed current price/PnL are pinned to its trigger quote.",
+        tools.add(tool("dmw_economy_fx_positions", "Read open positions, floating PnL, total_debt and equity after total debt (excludes wallet/bank). trading_debt is a compatibility alias for total_debt; do not classify human debt replies. Omit user_id for bot. Does not create players or settle positions. margin_call_deadline is non-null during the persisted response window; displayed current price/PnL are pinned to its trigger quote.",
                 objectSchema(List.of(), property("user_id", "integer", "Account to query; defaults to bot"))));
         tools.add(tool("dmw_economy_fx_history", "Read the latest 20 closed/liquidated positions and immutable settlement receipts. Omit user_id for bot.",
                 objectSchema(List.of(), property("user_id", "integer", "Account to query; defaults to bot"))));
@@ -263,11 +263,11 @@ public class McpToolCatalog {
         ((ObjectNode) fxOpen.path("properties").path("leverage")).put("minimum", 1).put("maximum", 100);
         ((ObjectNode) fxOpen.path("properties").path("pair")).putArray("enum").add("EUR/USD").add("GBP/USD").add("USD/JPY").add("USD/CHF");
         ((ObjectNode) fxOpen.path("properties").path("side")).putArray("enum").add("long").add("short");
-        tools.add(tool("dmw_economy_fx_open", "Open a long/short simulated FX position using existing game coins. Defaults to BOT, never master. Pass explicit user_id only for current requester. Fee=margin*leverage*(0.00005+leverage*0.000005), minimum0.01. Nominal exposure=margin*leverage. At60% loss a group warning is queued; at80% the owner has at most5 minutes to add margin, otherwise settlement uses the trigger quote; gaps can exceed margin, debit wallet/main-bank positive funds and create separate trading debt. No borrowing to open. Debt blocks new positions. One source message permits at most ONE open per actor, regardless of pair/side/request_id. Changed parameters return OPERATION_CONFLICT instead of another trade. Never invent prices or silently retry uncertain writes; inspect positions first.", fxOpen));
-        tools.add(tool("dmw_economy_fx_close", "Close ONE owned position at the current server-generated quote, or at its pinned trigger quote during a margin call. Defaults to bot. No additional close fee. Existing settlements are returned without another payment. Proceeds repay trading debt first. Never infer success from timeout.",
+        tools.add(tool("dmw_economy_fx_open", "Open a long/short simulated FX position using existing game coins. Defaults to BOT, never master. Pass explicit user_id only for current requester. Fee=margin*leverage*(0.00005+leverage*0.000005), minimum0.01. Nominal exposure=margin*leverage. At60% loss a group warning is queued; at80% the owner has at most5 minutes to add margin, otherwise settlement uses the trigger quote; gaps can exceed margin, debit wallet/main-bank positive funds and add unpaid losses to total debt. No borrowing to open. Debt blocks new positions. One source message permits at most ONE open per actor, regardless of pair/side/request_id. Changed parameters return OPERATION_CONFLICT instead of another trade. Never invent prices or silently retry uncertain writes; inspect positions first.", fxOpen));
+        tools.add(tool("dmw_economy_fx_close", "Close ONE owned position at the current server-generated quote, or at its pinned trigger quote during a margin call. Defaults to bot. No additional close fee. Existing settlements are returned without another payment. Proceeds offset unpaid losses first; returns total_debt. Never infer success from timeout.",
                 objectSchema(List.of("group_id", "position_id", "request_id"), property("group_id", "integer", "Current group"),
                         property("user_id", "integer", "Explicit requester, or omit for bot"), property("position_id", "integer", "Positive owned position ID"), property("request_id", "string", "Stable request ID"))));
-        tools.add(tool("dmw_economy_fx_repay", "Repay separate trading debt with wallet/main-bank positive funds. amount=all repays the debt only if sufficient funds; otherwise no payment. Numeric amount is capped at outstanding debt. Never creates medical overdraft. Defaults to bot.",
+        tools.add(tool("dmw_economy_fx_repay", "Repay unified total debt, including all fees and private-bank loan principal/interest, with wallet/main-bank positive funds. This legacy tool name is retained for compatibility; also works when trading is disabled. Returns total_debt, with trading_debt as a compatibility alias. amount=all repays the debt only if sufficient funds; otherwise no payment. Numeric amount is capped at total outstanding debt. Never borrows to repay. Defaults to bot.",
                 objectSchema(List.of("group_id", "amount", "request_id"), property("group_id", "integer", "Current group"),
                         property("user_id", "integer", "Explicit requester, or omit for bot"), property("amount", "string", "Positive amount with at most two decimals, or all"), property("request_id", "string", "Stable request ID"))));
         tools.add(tool("dmw_economy_fx_add_margin", "Add collateral to ONE owned position without changing nominal exposure or entry price. Defaults to bot. Does not borrow. Remains available when new opening is disabled. At60% loss a group warning is queued; at80% a persisted response deadline is at most5 minutes and before the next quote. An expired or inadequate top-up forces settlement at the trigger quote, not a later favorable quote. Existing per-position and total-margin limits apply. Failure/insufficient funds does not extend the deadline. Do not claim rescue unless the receipt confirms it.",
@@ -291,7 +291,7 @@ public class McpToolCatalog {
         ObjectNode tool = MAPPER.createObjectNode();
         tool.put("name", name);
         tool.put("description", description + (name.startsWith("dmw_economy_")
-                ? " In human replies, use player name fields or display_text, never raw QQ IDs. Action receipts should report the outcome and fee/effect only; mention medical debt only when positive, and reserve full status/balances for explicit queries."
+                ? " In human replies, use player name fields or display_text, never raw QQ IDs. Action receipts should report the outcome and fee/effect only; mention total debt only when positive, and reserve full status/balances for explicit queries."
                 : ""));
         tool.set("inputSchema", schema);
         return tool;

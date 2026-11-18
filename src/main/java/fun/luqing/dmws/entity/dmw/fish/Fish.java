@@ -5,12 +5,16 @@ import lombok.Data;
 
 @Data
 @Entity
-@Table(name = "fish")
+@Table(name = "fish", indexes = @Index(name = "idx_fish_active_level", columnList = "enabled,level,price"))
 public class Fish {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
+
+    /** Immutable built-in seed identity; display-name edits must not recreate the original species on restart. */
+    @Column(length = 255, unique = true)
+    private String seedName;
 
     @Column(nullable = false)
     private String name;
@@ -34,5 +38,8 @@ public class Fish {
 
     @Column(nullable = false)
     private Boolean special = false;
+
+    @Column(nullable = false, columnDefinition = "boolean default true")
+    private boolean enabled = true;
 
 }

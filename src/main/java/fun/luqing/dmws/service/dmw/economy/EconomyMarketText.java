@@ -24,7 +24,7 @@ public final class EconomyMarketText {
         if (view.quotedAt() != null) text.append("｜").append(TIME.format(view.quotedAt()));
         if (!view.fresh()) text.append("（行情未就绪或过期）");
         text.append("\n保证金 ").append(money(view.margin())).append("｜浮动盈亏 ").append(signed(view.floatingPnl()));
-        if (view.debt().signum() > 0) text.append("\n交易欠款 ").append(money(view.debt()));
+        if (view.debt().signum() > 0) text.append("\n总欠款 ").append(money(view.debt()));
         text.append("\n交易权益 ").append(money(view.tradingEquity())).append("（不含钱包/银行）");
         if (view.positions().isEmpty()) text.append("\n暂无持仓");
         for (var p : view.positions()) {

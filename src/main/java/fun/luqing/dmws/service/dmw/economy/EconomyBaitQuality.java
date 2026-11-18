@@ -4,19 +4,17 @@ import fun.luqing.dmws.common.economy.EconomyException;
 import java.math.BigDecimal;
 
 public enum EconomyBaitQuality {
-    WHITE("白", "fishing-bait-white", 10, 0, 1, 0),
-    GREEN("绿", "fishing-bait-green", 35, .02, 1.1, .1),
-    BLUE("蓝", "fishing-luck-bait", 75, .04, 1.25, .2),
-    PURPLE("紫", "fishing-bait-purple", 150, .06, 1.4, .3),
-    GOLD("金", "fishing-bait-gold", 250, .08, 1.6, .4),
-    RED("红", "fishing-bait-red", 400, .10, 1.8, 0);
+    WHITE("白", "fishing-bait-white", 10),
+    GREEN("绿", "fishing-bait-green", 35),
+    BLUE("蓝", "fishing-luck-bait", 75),
+    PURPLE("紫", "fishing-bait-purple", 150),
+    GOLD("金", "fishing-bait-gold", 250),
+    RED("红", "fishing-bait-red", 400);
 
     public final String label, code;
     public final BigDecimal price;
-    public final double successBonus, highFishWeight, riskReduction;
-    EconomyBaitQuality(String label, String code, int price, double success, double weight, double risk) {
+    EconomyBaitQuality(String label, String code, int price) {
         this.label=label; this.code=code; this.price=BigDecimal.valueOf(price);
-        this.successBonus=success; this.highFishWeight=weight; this.riskReduction=risk;
     }
     public String description() {
         return switch(this) {

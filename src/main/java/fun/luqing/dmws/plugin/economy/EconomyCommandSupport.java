@@ -26,17 +26,22 @@ public final class EconomyCommandSupport {
     }
 
     public static void execute(Bot bot, GroupMessageEvent event, Supplier<String> action) {
+        String message;
         try {
-            String message = action.get();
-            if (message != null && !message.isBlank()) {
-                reply(bot, event, message);
-            }
+            message = action.get();
         } catch (EconomyException exception) {
-            reply(bot, event, exception.getMessage());
+            message = exception.getMessage();
         } catch (RuntimeException exception) {
             log.error("经济指令执行失败: user={}, group={}, message={}",
                     event.getUserId(), event.getGroupId(), plainText(event), exception);
-            reply(bot, event, "操作失败，请稍后再试");
+            message = "操作失败，请稍后再试";
+        }
+        if (message != null && !message.isBlank()) {
+            try {
+                reply(bot, event, message);
+            } catch (RuntimeException exception) {
+                log.warn("经济指令回执发送结果不明: user={}, group={}", event.getUserId(), event.getGroupId(), exception);
+            }
         }
     }
 
@@ -49,6 +54,22 @@ public final class EconomyCommandSupport {
                         .build(),
                 false
         );
+    }
+
+    public static void sendTextQuery(Bot bot, GroupMessageEvent event, DmwConfig config, String title, String text) {
+        if (text.length() <= 600 && text.lines().count() <= 10) {
+            reply(bot, event, ShiroUtils.escape(text));
+            return;
+        }
+        List<String> pages = EconomyDisplayFormatter.textPages(title, text).stream().map(ShiroUtils::escape).toList();
+        try {
+            var response = bot.sendGroupForwardMsg(event.getGroupId(),
+                    ShiroUtils.generateForwardMsg(config.getBotId(), config.getBotName(), pages));
+            if (response != null && Integer.valueOf(0).equals(response.getRetCode()) && response.getData() != null) return;
+        } catch (RuntimeException exception) {
+            log.warn("查询合并转发发送失败: group={}", event.getGroupId(), exception);
+        }
+        for (String page : pages) reply(bot, event, page);
     }
 
     public static void sendForward(

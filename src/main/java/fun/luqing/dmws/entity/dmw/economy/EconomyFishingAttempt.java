@@ -3,7 +3,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
-@Data @Entity @Table(name="economy_fishing_attempt")
+@Data @Entity @Table(name="economy_fishing_attempt",
+        indexes = @Index(name = "idx_fishing_attempt_group_time", columnList = "group_id,occurred_at"))
 public class EconomyFishingAttempt {
     @Id @Column(length=160) private String operationId;
     private Long userId;

@@ -1,0 +1,261 @@
+[
+  {
+    "code": "global.cast.1",
+    "owner_code": "*",
+    "scene": "CAST",
+    "template": "这个池子里面真的有鱼吗？",
+    "weight": 1
+  },
+  {
+    "code": "global.cast.2",
+    "owner_code": "*",
+    "scene": "CAST",
+    "template": "抛得挺远，鱼能看见吗？",
+    "weight": 1
+  },
+  {
+    "code": "global.cast.3",
+    "owner_code": "*",
+    "scene": "CAST",
+    "template": "这次谁来咬钩？",
+    "weight": 1
+  },
+  {
+    "code": "global.busy.1",
+    "owner_code": "*",
+    "scene": "BUSY",
+    "template": "你已经在钓鱼了。",
+    "weight": 1
+  },
+  {
+    "code": "global.waiting.1",
+    "owner_code": "*",
+    "scene": "WAITING",
+    "template": "正在等鱼咬钩，会自动收竿。",
+    "weight": 1
+  },
+  {
+    "code": "global.no_cast.1",
+    "owner_code": "*",
+    "scene": "NO_CAST",
+    "template": "还没有新的出钓记录。",
+    "weight": 1
+  },
+  {
+    "code": "global.reel_failed.1",
+    "owner_code": "*",
+    "scene": "REEL_FAILED",
+    "template": "本次收竿结算失败，未消耗鱼饵，可重新抛竿。",
+    "weight": 1
+  },
+  {
+    "code": "global.reel_rejected.1",
+    "owner_code": "*",
+    "scene": "REEL_REJECTED",
+    "template": "本次未能收竿。\n原因：{reason}\n鱼饵未消耗。",
+    "weight": 1
+  },
+  {
+    "code": "global.encounter.1",
+    "owner_code": "*",
+    "scene": "ENCOUNTER",
+    "template": "你遇到了{event}。",
+    "weight": 1
+  },
+  {
+    "code": "global.description.1",
+    "owner_code": "*",
+    "scene": "DESCRIPTION",
+    "template": "{description}",
+    "weight": 1
+  },
+  {
+    "code": "global.catch_encounter.1",
+    "owner_code": "*",
+    "scene": "CATCH_ENCOUNTER",
+    "template": "你钓上了一条 {fish}。",
+    "weight": 1
+  },
+  {
+    "code": "global.escape_encounter.1",
+    "owner_code": "*",
+    "scene": "ESCAPE_ENCOUNTER",
+    "template": "{fish} 脱钩逃走了。",
+    "weight": 1
+  },
+  {
+    "code": "global.catch_result.1",
+    "owner_code": "*",
+    "scene": "CATCH_RESULT",
+    "template": "大小：{size}厘米，售价{reward}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.escape_estimate.1",
+    "owner_code": "*",
+    "scene": "ESCAPE_ESTIMATE",
+    "template": "附近的钓鱼佬{witness}说，这条鱼至少值{estimate}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.escape_estimate.2",
+    "owner_code": "*",
+    "scene": "ESCAPE_ESTIMATE",
+    "template": "这条鱼起码值{estimate}金币，钓鱼佬{witness}如是说。",
+    "weight": 1
+  },
+  {
+    "code": "global.escape_alone.1",
+    "owner_code": "*",
+    "scene": "ESCAPE_ALONE",
+    "template": "你四周张望，应该没有人看到吧",
+    "weight": 1
+  },
+  {
+    "code": "global.money_gain.1",
+    "owner_code": "*",
+    "scene": "MONEY_GAIN",
+    "template": "发现藏着的金币，获得{reward}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.money_loss.1",
+    "owner_code": "*",
+    "scene": "MONEY_LOSS",
+    "template": "本次额外损失{penalty}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.money_zero.1",
+    "owner_code": "*",
+    "scene": "MONEY_ZERO",
+    "template": "这次没有额外收获。",
+    "weight": 1
+  },
+  {
+    "code": "global.jail.1",
+    "owner_code": "*",
+    "scene": "JAIL",
+    "template": "警方带你回局子协助调查{minutes}分钟。",
+    "weight": 1
+  },
+  {
+    "code": "global.combat_win.1",
+    "owner_code": "*",
+    "scene": "COMBAT_WIN",
+    "template": "你成功制服了它，获得悬赏{reward}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.combat_loss.1",
+    "owner_code": "*",
+    "scene": "COMBAT_LOSS",
+    "template": "你没能制服它。",
+    "weight": 1
+  },
+  {
+    "code": "global.injury.1",
+    "owner_code": "*",
+    "scene": "INJURY",
+    "template": "你受了{injury}入院，医疗费出院另结。",
+    "weight": 1
+  },
+  {
+    "code": "global.debt.1",
+    "owner_code": "*",
+    "scene": "DEBT",
+    "template": "其中{borrowed}金币计入欠款。",
+    "weight": 1
+  },
+  {
+    "code": "global.combat_flow.1",
+    "owner_code": "*",
+    "scene": "COMBAT_FLOW",
+    "template": "{combat_result}{injury_notice}{red_bull}{baton}",
+    "weight": 1
+  },
+  {
+    "code": "global.boost_red_bull.1",
+    "owner_code": "*",
+    "scene": "BOOST_RED_BULL",
+    "template": "本次消耗1次红牛增益。",
+    "weight": 1
+  },
+  {
+    "code": "global.boost_baton.1",
+    "owner_code": "*",
+    "scene": "BOOST_BATON",
+    "template": "本次电棍耗电20，剩余{baton_energy}/100。",
+    "weight": 1
+  },
+  {
+    "code": "global.bait_purchase.1",
+    "owner_code": "*",
+    "scene": "BAIT_PURCHASE",
+    "template": "已自动购买{bait}1包，花费{bait_cost}金币。",
+    "weight": 1
+  },
+  {
+    "code": "global.bait_empty_default.1",
+    "owner_code": "*",
+    "scene": "BAIT_EMPTY_DEFAULT",
+    "template": "{bait_color}色鱼饵已耗尽，下次钓鱼自动购买。",
+    "weight": 1
+  },
+  {
+    "code": "global.bait_empty_other.1",
+    "owner_code": "*",
+    "scene": "BAIT_EMPTY_OTHER",
+    "template": "{bait_color}色鱼饵已耗尽，请购买或切换。",
+    "weight": 1
+  },
+  {
+    "code": "global.receipt.1",
+    "owner_code": "*",
+    "scene": "RECEIPT",
+    "template": "{encounter}\n描述：{description}\n{outcome}\n收益：{net}金币",
+    "weight": 1
+  },
+  {
+    "code": "global.rod_required.1",
+    "owner_code": "*",
+    "scene": "ROD_REQUIRED",
+    "template": "请先购买鱼竿",
+    "weight": 1
+  },
+  {
+    "code": "global.pool_empty.1",
+    "owner_code": "*",
+    "scene": "POOL_EMPTY",
+    "template": "当前鱼竿等级没有可钓鱼类",
+    "weight": 1
+  },
+  {
+    "code": "global.invalid_event.1",
+    "owner_code": "*",
+    "scene": "INVALID_EVENT",
+    "template": "钓鱼事件配置无效，请联系管理员",
+    "weight": 1
+  },
+  {
+    "code": "global.invalid_bait_rule.1",
+    "owner_code": "*",
+    "scene": "INVALID_BAIT_RULE",
+    "template": "鱼饵规则无效，请联系管理员",
+    "weight": 1
+  },
+  {
+    "code": "global.invalid_text.1",
+    "owner_code": "*",
+    "scene": "INVALID_TEXT",
+    "template": "钓鱼文案配置无效，请联系管理员。",
+    "weight": 1
+  },
+  {
+    "code": "crocodile.injury.1",
+    "owner_code": "crocodile",
+    "scene": "INJURY",
+    "template": "你被咬成{injury}入院，医疗费出院另结。",
+    "weight": 1
+  }
+]

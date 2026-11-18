@@ -22,6 +22,8 @@ spring:
 shiro:
   ws:
     access-token: "your_access_token"
+    # 图片上传和合并转发可能超过10秒；超时只表示回执不明，不代表消息一定未发送。
+    timeout: 45
     client:
       enable: true
       url: "ws://127.0.0.1:3001"
@@ -38,6 +40,13 @@ dmws:
   file-server-host: "127.0.0.1"
   mcp-server-enabled: true
   mcp-server-token: "Bearer xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  # 鱼种公开投稿 /fishing；审核使用独立账号，不复用 MCP 或 OneBot 密钥。
+  # 启用前执行 scripts/migrate_fishing_web.sql；用 hash_fishing_web_password.py 生成密码哈希。
+  fishing-web:
+    enabled: false
+    admin-username: admin
+    admin-password-hash: ""
+    session-minutes: 30
   mcp:
     economy:
       operator-id: 0 # deprecated; never used as an AI account
@@ -62,7 +71,7 @@ dmws:
     private-bank-loan-rate: 0.10
     private-bank-max-loan-days: 30
     fishing-rod-price: 500
-    fishing-cooldown-seconds: 30
+    fishing-scheduler-enabled: true
     # 模拟外汇：默认关闭；启用前执行 scripts/migrate_market.sql 并更新 AstrBot guard。
     # enabled 仅为初始状态，主人可发送「开启交易/关闭交易」持久化覆盖。
     # 关闭只禁止新开仓，行情、平仓和还款继续；accepting-opens=false 仍强制暂停新开仓。

@@ -64,7 +64,9 @@ public class EconomyMcpTools {
         result.put("user_id", userId).put("wallet", balances.wallet().toPlainString())
                 .put("user_name", names.resolve(optionalLong(args, "group_id"), userId))
                 .put("main_bank", balances.bank().toPlainString())
-                .put("total", balances.wallet().add(balances.bank()).toPlainString());
+                .put("total_debt", balances.totalDebt().toPlainString())
+                .put("total", balances.wallet().add(balances.bank().max(BigDecimal.ZERO)).subtract(balances.totalDebt()).toPlainString())
+                .put("display_text", balances.format());
         return result;
     }
 

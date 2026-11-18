@@ -37,18 +37,27 @@ public class EconomyLedgerStore {
         return applyChange(account, delta, operationId, reason, actorId, description, false);
     }
 
-    /** Only forced medical settlement can create/increase a main-bank overdraft. */
+    /** Compatibility entry point for medical settlement. */
     public AccountBalance medicalDebt(EconomyAccount account, BigDecimal amount, String operationId, String description) {
-        if (account.getScope() != EconomyAccountScope.MAIN_BANK) throw new IllegalArgumentException("医疗欠款只能记入主银行");
+        return forcedDebt(account, amount, operationId, EconomyLedgerReason.HOSPITAL_FEE, account.getOwnerId(), description);
+    }
+
+    public AccountBalance forcedDebt(EconomyAccount account, BigDecimal amount, String operationId,
+                                     EconomyLedgerReason reason, Long actorId, String description) {
+        if (account.getScope() != EconomyAccountScope.MAIN_BANK
+                || !java.util.Set.of(EconomyLedgerReason.HOSPITAL_FEE, EconomyLedgerReason.FISHING_PENALTY,
+                EconomyLedgerReason.ROB_FINE, EconomyLedgerReason.RAFFLE_FINE).contains(reason)) {
+            throw new IllegalArgumentException("仅强制费用可记入欠款");
+        }
         return applyChange(account, EconomyMoney.positive(amount).negate(), operationId,
-                EconomyLedgerReason.HOSPITAL_FEE, account.getOwnerId(), description, true);
+                reason, actorId, description, true);
     }
 
     private AccountBalance applyChange(EconomyAccount account, BigDecimal delta, String operationId,
-                                       EconomyLedgerReason reason, Long actorId, String description, boolean medicalDebt) {
+                                       EconomyLedgerReason reason, Long actorId, String description, boolean forcedDebt) {
         BigDecimal balanceAfter = account.getBalance().add(delta);
         boolean debtRepayment = account.getScope() == EconomyAccountScope.MAIN_BANK && delta.signum() > 0;
-        if (balanceAfter.signum() < 0 && !medicalDebt && !debtRepayment) {
+        if (balanceAfter.signum() < 0 && !forcedDebt && !debtRepayment) {
             throw new EconomyException("INSUFFICIENT_BALANCE", "余额不足");
         }
         if (balanceAfter.abs().compareTo(EconomyMoney.MAX) > 0) {

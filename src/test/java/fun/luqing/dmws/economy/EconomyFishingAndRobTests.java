@@ -10,9 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -37,22 +39,29 @@ class EconomyFishingAndRobTests {
     private EconomyRobService robService;
 
     @Autowired fun.luqing.dmws.service.dmw.economy.EconomyItemService items;
+    @MockitoBean fun.luqing.dmws.service.dmw.economy.EconomyFishingRandom random;
 
     @Test
-    void fishingChargesOnceAndEnforcesCooldown() {
+    void fishingWaitsUntilDueAndAllowsTheNextCastImmediatelyAfterReeling() {
         long userId = 94001L;
         adminService.adjust(userId, userId, "fisher", new BigDecimal("1000"), true, "fishing-seed");
         fishingService.buyRod(userId, "fisher", "fishing-rod-buy");
         items.addItem(userId,"fishing-bait-white",1);
 
-        EconomyFishingService.FishingResult result =
-                fishingService.fish(userId, "fisher", "fishing-action");
+        org.mockito.Mockito.when(random.weight(10000)).thenReturn(9999L);
+        var ticket = fishingService.cast(userId, "fisher", "fishing-action", 0, null, null, null, null);
+        long seconds = Duration.between(ticket.castAt(), ticket.dueAt()).toSeconds();
+        assertTrue(seconds >= 20 && seconds <= 60);
+        assertEquals(null, fishingService.reel(userId, "fishing-action", ticket.dueAt().minusNanos(1)));
+        assertEquals(new BigDecimal("500.00"), ledgerService.balance(userId, EconomyAccountScope.WALLET).balance());
+        assertEquals(1, items.backpack(userId).getFirst().getQuantity());
+        assertEquals("FISHING_IN_PROGRESS", assertThrows(EconomyException.class,
+                () -> fishingService.cast(userId, "fisher", "different-group", 0, 123L, null, null, null)).getCode());
+        var result = fishingService.reel(userId, "fishing-action", ticket.dueAt());
         assertEquals(new BigDecimal("0.00"), result.cost());
         assertTrue(result.walletBalance().compareTo(new BigDecimal("500.00")) >= 0);
-        assertThrows(
-                EconomyException.class,
-                () -> fishingService.fish(userId, "fisher", "fishing-action-2")
-        );
+        assertEquals(null, fishingService.reel(userId, "fishing-action", ticket.dueAt()));
+        fishingService.cast(userId, "fisher", "fishing-action-2", 0, null, null, null, null);
     }
 
     @Test

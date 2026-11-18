@@ -49,7 +49,7 @@ public final class EconomyRobNarrative {
         if (r.caught()) {
             if (r.poorTarget()) text += "\n你还没走远，警察就来给这场闹剧收尾了。";
             text += "\n释放时间：" + EconomyGameText.time(r.jailUntil(), now);
-            if (r.fine().signum() > 0) text += "\n罚款：" + EconomyMoney.format(r.fine()) + " 金币";
+            if (r.fine().signum() > 0) text += "\n罚款：" + EconomyMoney.format(r.fine()) + " 金币（余额不足部分计入欠款）";
             text += "\n可请低犯罪值的群友发送“保释 @你”，先用“保释费用 @你”查价。";
         }
         if (r.electricBatonUsed()) text += "\n电棍滋了一声，耗电20，剩余 " + r.electricBatonEnergy() + "/100；装备还在，包赢不在服务范围。";

@@ -28,6 +28,8 @@ import fun.luqing.dmws.service.dmw.economy.EconomyPrivateBankService.RepaymentVi
 @Service
 @RequiredArgsConstructor
 public class EconomyPrivateBankLoanService {
+    @jakarta.persistence.PersistenceContext(unitName = "dmw")
+    private jakarta.persistence.EntityManager entityManager;
     private final EconomyProperties properties;
     private final EconomyOperationService operationService;
     private final EconomyUserProfileService profileService;
@@ -35,6 +37,7 @@ public class EconomyPrivateBankLoanService {
     private final EconomyPrivateBankRepository bankRepository;
     private final EconomyPrivateBankLoanRepository loanRepository;
     private final fun.luqing.dmws.repository.dmw.economy.EconomyMarketPositionRepository marketPositions;
+    private final EconomyDebtQueryService debts;
 
     @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public LoanView borrow(
@@ -59,8 +62,8 @@ public class EconomyPrivateBankLoanService {
         profileService.getOrCreateForUpdate(userId, nickname);
         // Both FX writes and borrowing hold this profile lock. Read AFTER acquiring it, under READ_COMMITTED.
         if (marketPositions.existsByUserIdAndStatus(userId, fun.luqing.dmws.entity.dmw.economy.EconomyMarketPosition.Status.OPEN)
-                || ledgerService.accountBalance(EconomyMarketService.debtKey(userId), EconomyAccountScope.PLUGIN).signum() > 0) {
-            throw new EconomyException("MARKET_CREDIT_RESTRICTED", "仍有外汇持仓或交易欠款，暂不能新增私人银行贷款；请先平仓并还清交易欠款");
+                || debts.total(userId).signum() > 0) {
+            throw new EconomyException("MARKET_CREDIT_RESTRICTED", "仍有外汇持仓或欠款，暂不能新增贷款；请先平仓并还清欠款");
         }
         ledgerService.transferAccountToUser(
                 bank.getCapitalAccountKey(),
@@ -91,7 +94,7 @@ public class EconomyPrivateBankLoanService {
         return view(loan, bank);
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public RepaymentView repay(
             long userId,
             String nickname,
@@ -159,24 +162,28 @@ public class EconomyPrivateBankLoanService {
                 List.of(EconomyLoanStatus.ACTIVE),
                 LocalDateTime.now()
         );
-        for (EconomyPrivateBankLoan loan : dueLoans) {
-            loan.setStatus(EconomyLoanStatus.OVERDUE);
-        }
+        dueLoans.stream().sorted(java.util.Comparator.comparing(loan -> loan.getId())).forEach(loan -> {
+            entityManager.refresh(loan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+            if (loan.getStatus() == EconomyLoanStatus.ACTIVE && loan.getDueAt().isBefore(LocalDateTime.now())) {
+                loan.setStatus(EconomyLoanStatus.OVERDUE);
+            }
+        });
     }
 
-    @Transactional(transactionManager = "dmwTransactionManager")
+    @Transactional(transactionManager = "dmwTransactionManager", isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void settleOverdueLoan(long loanId) {
+        EconomyPrivateBankLoan snapshot = loanRepository.findById(loanId).orElse(null);
+        if (snapshot == null) return;
+        EconomyPrivateBank bank = bankRepository.findForUpdate(snapshot.getBankId()).orElse(null);
+        if (bank == null) return;
+        profileService.getOrCreateForUpdate(snapshot.getBorrowerId(), "");
         EconomyPrivateBankLoan loan = loanRepository.findForUpdate(loanId).orElse(null);
+        if (loan != null) entityManager.refresh(loan, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         if (loan == null
                 || loan.getStatus() == EconomyLoanStatus.REPAID
                 || loan.getDueAt().isAfter(LocalDateTime.now())) {
             return;
         }
-        EconomyPrivateBank bank = bankRepository.findById(loan.getBankId()).orElse(null);
-        if (bank == null) {
-            return;
-        }
-
         String day = LocalDate.now().toString();
         BigDecimal remaining = loan.getRemainingDue();
         BigDecimal wallet = ledgerService.balance(
@@ -237,6 +244,17 @@ public class EconomyPrivateBankLoanService {
                 ? EconomyLoanStatus.OVERDUE
                 : EconomyLoanStatus.ACTIVE);
         loanRepository.save(loan);
+    }
+
+    /** Caller holds bank/player locks and has already collected this payment. */
+    @Transactional(transactionManager = "dmwTransactionManager", propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void repayCollected(EconomyPrivateBankLoan loan, EconomyPrivateBank bank, BigDecimal payment, String operationId) {
+        if (bank == null || payment.signum() <= 0 || payment.compareTo(loan.getRemainingDue()) > 0) {
+            throw new EconomyException("DEBT_CHANGED", "欠款发生变化，请重新还款");
+        }
+        ledgerService.creditAccount(bank.getCapitalAccountKey(), EconomyAccountScope.PLUGIN, bank.getOwnerId(),
+                payment, operationId, EconomyLedgerReason.PRIVATE_BANK_REPAY, loan.getBorrowerId(), "还款归还债权银行");
+        settleLoan(loan, payment);
     }
 
     private LoanView view(EconomyPrivateBankLoan loan, EconomyPrivateBank bank) {

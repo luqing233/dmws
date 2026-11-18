@@ -129,6 +129,7 @@ public class EconomyRaffleService {
 
     private PrizeView applyPrize(long userId, EconomyRafflePrize prize, String operationId) {
         BigDecimal actualReward = EconomyMoney.zero();
+        String description = prize.getDescription();
         switch (prize.getType()) {
             case MONEY -> {
                 operationService.start(operationId, "RAFFLE_PRIZE_MONEY", userId, prize.getCode());
@@ -145,15 +146,17 @@ public class EconomyRaffleService {
             }
             case FINE -> {
                 operationService.start(operationId, "RAFFLE_PRIZE_FINE", userId, prize.getCode());
-                actualReward = ledgerService.debitUpTo(
+                var payment = ledgerService.chargeLoss(
                         userId,
-                        EconomyAccountScope.WALLET,
                         EconomyMoney.positive(prize.getMoneyAmount()),
                         operationId,
                         EconomyLedgerReason.RAFFLE_FINE,
                         userId,
                         "抽奖惩罚: " + prize.getName()
                 );
+                actualReward = payment.fee();
+                if (payment.borrowed().signum() > 0) description += "，其中"
+                        + EconomyMoney.format(payment.borrowed()) + "金币计入欠款";
             }
             case TITLE -> {
                 if (prize.getTitleCode() == null || prize.getTitleCode().isBlank()) {
@@ -180,7 +183,7 @@ public class EconomyRaffleService {
         return new PrizeView(
                 prize.getCode(),
                 prize.getName(),
-                prize.getDescription(),
+                description,
                 prize.getType(),
                 actualReward
         );

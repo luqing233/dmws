@@ -6,6 +6,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -14,6 +16,17 @@ import java.util.concurrent.ThreadPoolExecutor;
 @Configuration
 @EnableAsync
 public class AsyncConfig {
+
+    // 下载不能排在等待下载结果的指令任务后面，避免共用线程池时互相等待。
+    @Bean(name = "imageDownloadExecutor", destroyMethod = "shutdownNow")
+    public ExecutorService imageDownloadExecutor() {
+        return new ThreadPoolExecutor(4, 4, 0L, java.util.concurrent.TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(20), runnable -> {
+                    Thread thread = new Thread(runnable, "dmw-image-download");
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.AbortPolicy());
+    }
 
     /**
      * 配置异步任务线程池

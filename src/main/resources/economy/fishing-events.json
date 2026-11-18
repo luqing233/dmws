@@ -1,118 +1,158 @@
 [
   {
     "code": "boots",
+    "encounter_template": "你钓上了一只 {fish}。",
     "name": "靴子",
     "description": "赏金猎人的靴子，另一只的主人似乎正在找你。",
-    "kind": "FINE",
+    "kind": "MONEY",
+    "pool_code": "NEGATIVE",
     "tickets": 120,
-    "penalty": 10
+    "amount_min": -10,
+    "amount_max": -10,
+    "amount_step": 1
   },
   {
     "code": "dead-fish",
+    "encounter_template": "你钓上了一条 {fish}。",
     "name": "死鱼",
     "description": "鱼是钓到了，可惜它已经提前结束了今天的活动。",
-    "kind": "FINE",
+    "kind": "MONEY",
+    "pool_code": "NEGATIVE",
     "tickets": 80,
-    "penalty": 30
+    "amount_min": -30,
+    "amount_max": -30,
+    "amount_step": 1
   },
   {
     "code": "snag",
+    "encounter_template": "你的鱼钩挂底了。",
     "name": "挂底",
     "description": "你和河底进行了势均力敌的较量，最后损失了一套鱼线。",
-    "kind": "FINE",
+    "kind": "MONEY",
+    "pool_code": "NEGATIVE",
     "tickets": 60,
-    "penalty": 50
+    "amount_min": -50,
+    "amount_max": -50,
+    "amount_step": 1
   },
   {
     "code": "exam",
+    "encounter_template": "你钓上了一本 {fish}。",
     "name": "五年高考三年模拟",
     "description": "湿透的卷子上，最后一道大题居然还没写完。",
-    "kind": "FINE",
+    "kind": "MONEY",
+    "pool_code": "NEGATIVE",
     "tickets": 30,
-    "penalty": 80
+    "amount_min": -80,
+    "amount_max": -80,
+    "amount_step": 1
   },
   {
     "code": "salamander",
+    "encounter_template": "你钓上了一条 {fish}。",
     "name": "娃娃鱼",
     "description": "这位不能带走，赶紧放生。",
-    "kind": "FINE",
+    "kind": "MONEY",
+    "pool_code": "NEGATIVE",
     "tickets": 10,
-    "penalty": 120
+    "amount_min": -120,
+    "amount_max": -120,
+    "amount_step": 1
   },
   {
     "code": "corpse",
+    "encounter_template": "你钓上了一具 {fish}。",
     "name": "尸体",
     "description": "鱼钩挂住了一具尸体，警察已经赶到现场。",
     "kind": "JAIL",
+    "pool_code": "NEGATIVE",
     "tickets": 20,
-    "penalty": 0
+    "amount_min": 0,
+    "amount_max": 0,
+    "amount_step": 1
   },
   {
     "code": "crocodile",
+    "encounter_template": "你钓上了一条 {fish}。",
     "name": "尼罗鳄",
     "description": "地面属于尼罗鳄!",
-    "kind": "CROCODILE",
+    "kind": "COMBAT",
+    "pool_code": "COMBAT",
     "tickets": 80,
-    "penalty": 0
+    "amount_min": 800,
+    "amount_max": 2000,
+    "amount_step": 1
   },
   {
     "code": "bottle",
+    "encounter_template": "你钓上了一个 {fish}。",
     "name": "漂流瓶",
     "description": "纸条写着：“别钓了，鱼都下班了。”瓶底似乎还有东西。",
-    "kind": "FUN",
+    "kind": "MONEY",
+    "pool_code": "FUN",
     "tickets": 5,
-    "penalty": 0,
-    "reward_min": 20,
-    "reward_max": 60
+    "amount_min": 20,
+    "amount_max": 60,
+    "amount_step": 1
   },
   {
     "code": "parcel",
+    "encounter_template": "你钓上了一个 {fish}。",
     "name": "神秘包裹",
     "description": "包裹上写着：献给今天最有耐心的钓鱼人。",
-    "kind": "FUN",
+    "kind": "MONEY",
+    "pool_code": "FUN",
     "tickets": 3,
-    "penalty": 0,
-    "reward_min": 40,
-    "reward_max": 100
+    "amount_min": 40,
+    "amount_max": 100,
+    "amount_step": 1
   },
   {
     "code": "note",
+    "encounter_template": "你钓上了一张 {fish}。",
     "name": "钓鱼佬的留言",
     "description": "“这里没有鱼。”留言背面贴着一点路费。",
-    "kind": "FUN",
+    "kind": "MONEY",
+    "pool_code": "FUN",
     "tickets": 2,
-    "penalty": 0,
-    "reward_min": 10,
-    "reward_max": 30
+    "amount_min": 10,
+    "amount_max": 30,
+    "amount_step": 1
   },
   {
     "code": "money-bag",
+    "encounter_template": "你钓上了一个 {fish}。",
     "name": "遗失的钱袋",
     "description": "一只沉甸甸的钱袋，钱币的响声比鱼扑腾还好听。",
-    "kind": "REWARD",
+    "kind": "MONEY",
+    "pool_code": "REWARD",
     "tickets": 6,
-    "penalty": 0,
-    "reward_min": 100,
-    "reward_max": 300
+    "amount_min": 100,
+    "amount_max": 300,
+    "amount_step": 1
   },
   {
     "code": "chest",
+    "encounter_template": "你钓上了一个 {fish}。",
     "name": "小宝箱",
     "description": "锈迹斑斑的锁扣下，藏着一份意外之喜。",
-    "kind": "REWARD",
+    "kind": "MONEY",
+    "pool_code": "REWARD",
     "tickets": 3,
-    "penalty": 0,
-    "reward_min": 200,
-    "reward_max": 800
+    "amount_min": 200,
+    "amount_max": 800,
+    "amount_step": 1
   },
   {
     "code": "bounty",
+    "encounter_template": "你钓上了一个 {fish}。",
     "name": "悬赏物品",
     "description": "你找到了失主悬赏寻找的物品，奖金已经送达。",
-    "kind": "REWARD",
+    "kind": "MONEY",
+    "pool_code": "REWARD",
     "tickets": 1,
-    "penalty": 0,
-    "reward_min": 800,
-    "reward_max": 2000
+    "amount_min": 800,
+    "amount_max": 2000,
+    "amount_step": 1
   }
 ]

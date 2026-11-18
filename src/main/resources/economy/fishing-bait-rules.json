@@ -1,0 +1,8 @@
+[
+  {"quality":"WHITE","success_bonus_bps":0,"high_fish_weight_bps":10000,"special_multiplier_bps":10000,"special_cap_bps":10000,"pools":[{"code":"NEGATIVE","scale_bps":10000},{"code":"COMBAT","scale_bps":10000}]},
+  {"quality":"GREEN","success_bonus_bps":200,"high_fish_weight_bps":11000,"special_multiplier_bps":10000,"special_cap_bps":10000,"pools":[{"code":"NEGATIVE","scale_bps":9000},{"code":"COMBAT","scale_bps":9000}]},
+  {"quality":"BLUE","success_bonus_bps":400,"high_fish_weight_bps":12500,"special_multiplier_bps":10000,"special_cap_bps":10000,"pools":[{"code":"NEGATIVE","scale_bps":8000},{"code":"COMBAT","scale_bps":8000}]},
+  {"quality":"PURPLE","success_bonus_bps":600,"high_fish_weight_bps":14000,"special_multiplier_bps":10000,"special_cap_bps":10000,"pools":[{"code":"NEGATIVE","scale_bps":7000},{"code":"COMBAT","scale_bps":7000}]},
+  {"quality":"GOLD","success_bonus_bps":800,"high_fish_weight_bps":16000,"special_multiplier_bps":10000,"special_cap_bps":10000,"pools":[{"code":"NEGATIVE","scale_bps":6000},{"code":"COMBAT","scale_bps":6000}]},
+  {"quality":"RED","success_bonus_bps":1000,"high_fish_weight_bps":18000,"special_multiplier_bps":30000,"special_cap_bps":1000,"pools":[{"code":"FUN","budget":800},{"code":"REWARD","budget":600},{"code":"COMBAT","budget":400},{"code":"NEGATIVE","budget":200}]}
+]

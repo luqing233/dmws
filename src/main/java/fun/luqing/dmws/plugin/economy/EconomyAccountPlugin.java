@@ -16,6 +16,8 @@ import fun.luqing.dmws.service.dmw.economy.EconomySignService;
 import fun.luqing.dmws.service.dmw.economy.EconomyTitleService;
 import fun.luqing.dmws.service.dmw.economy.EconomyUserProfileService;
 import fun.luqing.dmws.service.dmw.economy.EconomyPlayerNameService;
+import fun.luqing.dmws.service.dmw.economy.EconomyDebtQueryService;
+import fun.luqing.dmws.service.dmw.economy.EconomyMarketService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -37,6 +39,28 @@ public class EconomyAccountPlugin {
     private final EconomyUserProfileService profileService;
     private final DmwConfig dmwConfig;
     private final EconomyPlayerNameService names;
+    private final EconomyMarketService repayments;
+    private final EconomyDebtQueryService debtQueries;
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^(欠款|我的欠款|总欠款)$")
+    @CommandInfo(cmd = "我的欠款", desc = "查看总欠款，含全部贷款本金和利息")
+    public void debt(Bot bot, GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot, event, () -> debtQueries.describe(event.getUserId()));
+    }
+
+    @GroupMessageHandler
+    @MessageHandlerFilter(cmd = "^还款(?:\\s+\\S+)?$")
+    @CommandInfo(startWith = "还款", desc = "还款 <金额或全部>，统一偿还总欠款")
+    public void repay(Bot bot, GroupMessageEvent event) {
+        EconomyCommandSupport.execute(bot, event, () -> {
+            String raw = EconomyCommandSupport.argument(event, "还款");
+            if (raw.isBlank()) throw new EconomyException("ARGUMENT_REQUIRED", "格式：还款 <金额或全部>");
+            BigDecimal amount = EconomyCommandSupport.requestsAll(raw) ? null : EconomyMoney.parse(raw);
+            return repayments.repay(event.getUserId(), EconomyCommandSupport.nickname(event), amount,
+                    EconomyCommandSupport.operationId("fx-repay", event)).displayText();
+        });
+    }
 
     @GroupMessageHandler
     @MessageHandlerFilter(cmd = "(?i)^(签到|打卡|sign)$")

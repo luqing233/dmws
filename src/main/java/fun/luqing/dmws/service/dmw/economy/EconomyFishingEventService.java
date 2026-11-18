@@ -7,6 +7,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 import java.math.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 @Service @RequiredArgsConstructor
 public class EconomyFishingEventService {
     private final EconomyFishingEventRepository events;
@@ -15,61 +18,29 @@ public class EconomyFishingEventService {
     private final EconomyLedgerService ledger;
     private final EconomyFishingRandom random;
     private final EconomyGameTime time;
+    private final EconomyFishingTextService texts;
     @Transactional(transactionManager="dmwTransactionManager", propagation=Propagation.MANDATORY)
-    public Outcome encounter(EconomyUserProfile player,EconomyBaitQuality bait,String operation) {
+    public Outcome encounter(EconomyUserProfile player, EconomyFishingBaitRule rule, String operation) {
         var profile=combat.profile(player.getUserId());
         profile.setFishingAttempts(profile.getFishingAttempts()+1);
-        boolean protectedPlayer=profile.getFishingAttempts()<=10;
-        if(protectedPlayer && bait!=EconomyBaitQuality.RED) return null;
-        var pool=events.findByEnabledTrueOrderByCodeAsc();
-        long total=0;
-        for(var e:pool) {
-            if(e.getTickets()<0 || e.getPenalty().signum()<0 || !java.util.Set.of("FINE","JAIL","CROCODILE","FUN","REWARD").contains(e.getKind())
-                    || e.getJailMinutes()<1 || e.getJailMinutes()>30 || e.getStrengthMin()<1 || e.getStrengthMax()<e.getStrengthMin()
-                    || e.getStrengthMax()>100 || e.getRewardMin().signum()<1 || e.getRewardMax().compareTo(e.getRewardMin())<0
-                    || e.getWinInjuryPercent()<0 || e.getWinInjuryPercent()>100 || e.getLightPercent()<0 || e.getMediumPercent()<0
-                    || e.getLightPercent()+e.getMediumPercent()>100) throw new EconomyException("INVALID_EVENT", "钓鱼事件配置无效，请联系管理员");
-            if(!java.util.Set.of("FUN","REWARD").contains(e.getKind())) total+=e.getTickets();
-        }
-        if(total>10000) throw new EconomyException("INVALID_EVENT", "钓鱼事件总概率超过100%，请联系管理员");
-        EconomyFishingEvent selected=null;
-        if(bait==EconomyBaitQuality.RED) {
-            long roll=random.weight(10000);
-            String category=roll<800?"FUN":roll<1400?"REWARD":roll<1800?"CROCODILE":roll<2000?"NEGATIVE":null;
-            if(category==null || protectedPlayer && !java.util.Set.of("FUN","REWARD").contains(category)) return null;
-            var choices=pool.stream().filter(e->category.equals("NEGATIVE")?java.util.Set.of("FINE","JAIL").contains(e.getKind()):category.equals(e.getKind())).toList();
-            long tickets=choices.stream().mapToLong(EconomyFishingEvent::getTickets).sum();
-            if(tickets<=0) return null;
-            long choice=random.weight(tickets);
-            for(var e:choices) {choice-=e.getTickets();if(choice<0) {selected=e;break;}}
-        } else {
-            long ticket=random.weight(10000);
-            for(var e:pool) {
-                if(java.util.Set.of("FUN","REWARD").contains(e.getKind())) continue;
-                ticket-=Math.round(e.getTickets()*(1-bait.riskReduction));
-                if(ticket<0) {selected=e;break;}
+        var e = selectEvent(rule);
+        if (e == null) return null;
+        long user = player.getUserId();
+        if(e.getKind().equals("MONEY")) {
+            long steps = e.getAmountMax().subtract(e.getAmountMin()).divide(e.getAmountStep()).longValueExact();
+            BigDecimal amount = e.getAmountMin().add(e.getAmountStep().multiply(BigDecimal.valueOf(random.weight(steps + 1))));
+            if (amount.signum() < 0) {
+                var payment = ledger.chargeLoss(user, amount.negate(), operation, EconomyLedgerReason.FISHING_PENALTY, user, e.getName());
+                return new Outcome(e, false, BigDecimal.ZERO, payment.fee(), payment.borrowed(), 0, false, null);
             }
-        }
-        if(selected==null) return null;
-        var e=selected;long user=player.getUserId();
-        if(java.util.Set.of("FUN","REWARD").contains(e.getKind())) {
-            long spread=e.getRewardMax().subtract(e.getRewardMin()).longValueExact();
-            if(spread>100000) throw new EconomyException("INVALID_EVENT","事件奖励范围过大");
-            BigDecimal reward=e.getRewardMin().add(BigDecimal.valueOf(random.weight(spread+1))).setScale(2);
-            ledger.creditUser(user,EconomyAccountScope.WALLET,reward,operation,EconomyLedgerReason.FISHING_EVENT_REWARD,user,e.getName());
-            return new Outcome(e,true,reward,BigDecimal.ZERO,0,false,null,"发现藏着的金币，获得"+EconomyMoney.format(reward)+"金币。");
+            if (amount.signum() > 0)
+                ledger.creditUser(user,EconomyAccountScope.WALLET,amount,operation,EconomyLedgerReason.FISHING_EVENT_REWARD,user,e.getName());
+            return new Outcome(e,true,amount,BigDecimal.ZERO,BigDecimal.ZERO,0,false,null);
         }
         var state=conditions.lock(user,player.getNickname());
-        if(e.getKind().equals("FINE")) {
-            var penalty=ledger.debitUpTo(user,EconomyAccountScope.WALLET,e.getPenalty(),operation,EconomyLedgerReason.FISHING_PENALTY,user,e.getName());
-            String text="本次额外损失"+EconomyMoney.format(penalty)+"金币。";
-            if(penalty.compareTo(e.getPenalty())<0) text+="钱包不足，仅扣除剩余金币。";
-            return new Outcome(e,false,BigDecimal.ZERO,penalty,0,false,null,text);
-        }
         if(e.getKind().equals("JAIL")) {
             state.setJailUntil(time.now().plusMinutes(e.getJailMinutes()));
-            return new Outcome(e,false,BigDecimal.ZERO,BigDecimal.ZERO,0,false,null,
-                    "警方带你回局子协助调查"+e.getJailMinutes()+"分钟。");
+            return new Outcome(e,false,BigDecimal.ZERO,BigDecimal.ZERO,BigDecimal.ZERO,0,false,null);
         }
         int strength=e.getStrengthMin()+(int)random.weight((long)e.getStrengthMax()-e.getStrengthMin()+1);
         var boost=combat.useBoosts(player);
@@ -81,19 +52,98 @@ public class EconomyFishingEventService {
             injury=grade<e.getLightPercent()?1+(int)random.weight(30):grade<e.getLightPercent()+e.getMediumPercent()?31+(int)random.weight(30):61+(int)random.weight(40);
         }
         BigDecimal reward=BigDecimal.ZERO;
-        String text="你没能制服它。";
         if(won) {
             BigDecimal ratio=e.getStrengthMax()==e.getStrengthMin()?BigDecimal.ONE:BigDecimal.valueOf(strength-e.getStrengthMin()).divide(BigDecimal.valueOf(e.getStrengthMax()-e.getStrengthMin()),10,RoundingMode.HALF_UP);
-            reward=e.getRewardMin().add(e.getRewardMax().subtract(e.getRewardMin()).multiply(ratio)).setScale(2,RoundingMode.HALF_UP);
-            ledger.creditUser(user,EconomyAccountScope.WALLET,reward,operation,EconomyLedgerReason.FISHING_EVENT_REWARD,user,"制服尼罗鳄奖金");
-            combat.victory(user,"crocodile");
-            text="你成功制服了它，获得悬赏。";
+            reward=e.getAmountMin().add(e.getAmountMax().subtract(e.getAmountMin()).multiply(ratio)).setScale(2,RoundingMode.HALF_UP);
+            if (reward.signum() > 0)
+                ledger.creditUser(user,EconomyAccountScope.WALLET,reward,operation,EconomyLedgerReason.FISHING_EVENT_REWARD,user,e.getName());
+            combat.victory(user,e.getCode());
         }
         if(injury>0) {
             conditions.admit(state,injury);
-            text+="你被咬成"+EconomyGameText.injury(injury)+"入院，医疗费出院另结。";
         }
-        return new Outcome(e,won,reward,BigDecimal.ZERO,injury,boost.redBullUsed(),boost.batonEnergy(),text);
+        return new Outcome(e,won,reward,BigDecimal.ZERO,BigDecimal.ZERO,injury,boost.redBullUsed(),boost.batonEnergy());
     }
-    public record Outcome(EconomyFishingEvent event,boolean won,BigDecimal reward,BigDecimal penalty,int injury,boolean redBull,Integer batonEnergy,String text) { }
+
+    private EconomyFishingEvent selectEvent(EconomyFishingBaitRule rule) {
+        var available = events.findByEnabledTrueOrderByCodeAsc();
+        var pools = new ArrayList<DrawPool>();
+        var seen = new HashSet<String>();
+        long budget = 0;
+        for (var pool : rule.getPools()) {
+            if (pool == null || pool.getPoolCode() == null || pool.getPoolCode().isBlank() || !seen.add(pool.getPoolCode())
+                    || pool.getTicketScaleBps() < 0 || pool.getTicketScaleBps() > 10000
+                    || pool.getTicketBudget() != null && pool.getTicketBudget() < 0) throw invalidEvent();
+            boolean grouped = pool.getTicketBudget() != null;
+            var entries = new ArrayList<WeightedEvent>();
+            long total = 0;
+            for (var event : available) {
+                if (!pool.getPoolCode().equals(event.getPoolCode())) continue;
+                if (event.getTickets() < 0) throw invalidEvent();
+                long tickets = grouped ? event.getTickets()
+                        : Math.round(event.getTickets() * (pool.getTicketScaleBps() / 10000.0));
+                if (tickets == 0) continue;
+                validate(event);
+                entries.add(new WeightedEvent(event, tickets));
+                total += tickets;
+            }
+            long span = grouped ? pool.getTicketBudget() : total;
+            budget += span;
+            pools.add(new DrawPool(entries, span, total, grouped));
+        }
+        if (budget > 10000) throw invalidEvent();
+        long roll = random.weight(10000);
+        for (var pool : pools) {
+            if (roll >= pool.span()) {
+                roll -= pool.span();
+                continue;
+            }
+            if (pool.total() == 0) return null;
+            long ticket = pool.grouped() ? random.weight(pool.total()) : roll;
+            for (var entry : pool.entries()) {
+                ticket -= entry.tickets();
+                if (ticket < 0) return entry.event();
+            }
+        }
+        return null;
+    }
+
+    private void validate(EconomyFishingEvent event) {
+        boolean valid = switch (event.getKind()) {
+            case "MONEY" -> validRange(event);
+            case "JAIL" -> event.getJailMinutes() >= 1 && event.getJailMinutes() <= 30;
+            case "COMBAT" -> validRange(event) && event.getAmountMin().signum() >= 0
+                    && event.getStrengthMin() >= 1 && event.getStrengthMax() >= event.getStrengthMin()
+                    && event.getStrengthMax() <= 100 && event.getWinInjuryPercent() >= 0
+                    && event.getWinInjuryPercent() <= 100 && event.getLightPercent() >= 0
+                    && event.getLightPercent() <= 100 && event.getMediumPercent() >= 0
+                    && event.getMediumPercent() <= 100 - event.getLightPercent();
+            default -> false;
+        };
+        if (!valid) throw invalidEvent();
+    }
+
+    private boolean validRange(EconomyFishingEvent event) {
+        if (event.getAmountMin() == null || event.getAmountMax() == null || event.getAmountStep() == null
+                || event.getAmountStep().signum() <= 0 || event.getAmountMin().compareTo(event.getAmountMax()) > 0
+                || event.getAmountMin().abs().compareTo(EconomyMoney.MAX) > 0
+                || event.getAmountMax().abs().compareTo(EconomyMoney.MAX) > 0) return false;
+        try {
+            event.getAmountMin().setScale(2, RoundingMode.UNNECESSARY);
+            event.getAmountMax().setScale(2, RoundingMode.UNNECESSARY);
+            event.getAmountStep().setScale(2, RoundingMode.UNNECESSARY);
+            long steps = event.getAmountMax().subtract(event.getAmountMin())
+                    .divide(event.getAmountStep(), 0, RoundingMode.UNNECESSARY).longValueExact();
+            return steps <= 10000000;
+        } catch (ArithmeticException invalid) { return false; }
+    }
+
+    private EconomyException invalidEvent() {
+        return new EconomyException("INVALID_EVENT", texts.message("INVALID_EVENT", java.util.Map.of(), EconomyFishingRandom.newSeed()));
+    }
+
+    private record WeightedEvent(EconomyFishingEvent event, long tickets) { }
+    private record DrawPool(List<WeightedEvent> entries, long span, long total, boolean grouped) { }
+    public record Outcome(EconomyFishingEvent event,boolean won,BigDecimal reward,BigDecimal penalty,
+                          BigDecimal borrowed,int injury,boolean redBull,Integer batonEnergy) { }
 }
